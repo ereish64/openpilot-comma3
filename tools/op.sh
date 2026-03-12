@@ -410,6 +410,76 @@ function op_switch() {
   git submodule foreach git clean -df
 }
 
+function op_restart() {
+  op_before_cmd
+
+  if [[ -z "$1" ]]; then
+    echo -e "${BOLD}${UNDERLINE}Usage:${NC} op restart <MODULE>"
+    echo ""
+    echo "  Restart a Python process managed by openpilot."
+    echo "  Kills the existing process and starts a new one using"
+    echo "  the same launcher mechanism as the manager."
+    echo ""
+    echo -e "${BOLD}${UNDERLINE}Examples:${NC}"
+    echo "  op restart system.webrtc.webrtcd"
+    echo "  op restart system.loggerd.uploader"
+    return 1
+  fi
+
+  MODULE="$1"
+  MODULE_AS_PATH="${MODULE//\.//}"
+  NAME="${MODULE##*.}"
+
+  # find existing processes:
+  # 1. pgrep -x: exact match on process title (manager uses setproctitle to set it to the module path)
+  # 2. pgrep -f: match on full cmdline (for processes started with python -m)
+  PIDS=$( (pgrep -x "$MODULE" 2>/dev/null; pgrep -f "python.*${MODULE}" 2>/dev/null; pgrep -f "python.*${MODULE_AS_PATH}" 2>/dev/null) | sort -u)
+  # filter out our own PID and parent shell
+  PIDS=$(echo "$PIDS" | grep -v "^$$\$" | grep -v "^$PPID\$" | tr '\n' ' ' | xargs)
+
+  if [[ -z "$PIDS" ]]; then
+    echo -e " ↳ [${RED}✗${NC}] No running process found for '${MODULE}'"
+    return 1
+  fi
+
+  echo -e " ↳ Stopping ${MODULE} [${PIDS}]..."
+  kill -INT $PIDS 2>/dev/null || true
+  sleep 2
+  for pid in $PIDS; do
+    if kill -0 $pid 2>/dev/null; then
+      echo -e " ↳ Force killing ${pid}..."
+      kill -9 $pid 2>/dev/null || true
+    fi
+  done
+
+  echo -e " ↳ Starting ${MODULE}..."
+  # restart using the same launcher mechanism as the manager (process.py:launcher)
+  python3 -c "
+import importlib, os
+from setproctitle import setproctitle
+import cereal.messaging as messaging
+import openpilot.system.sentry as sentry
+from openpilot.common.swaglog import cloudlog
+os.setpgrp()
+mod = importlib.import_module('${MODULE}')
+setproctitle('${MODULE}')
+messaging.reset_context()
+cloudlog.bind(daemon='${NAME}')
+sentry.set_tag('daemon', '${NAME}')
+mod.main()
+" </dev/null &>/dev/null &
+  NEW_PID=$!
+  disown $NEW_PID
+
+  sleep 1
+  if kill -0 $NEW_PID 2>/dev/null; then
+    echo -e " ↳ [${GREEN}✔${NC}] ${MODULE} restarted (PID: ${NEW_PID})"
+  else
+    echo -e " ↳ [${RED}✗${NC}] Failed to restart ${MODULE}"
+    return 1
+  fi
+}
+
 function op_start() {
   if [[ -f "/AGNOS" ]]; then
     op_before_cmd
@@ -422,62 +492,6 @@ function op_stop() {
     op_before_cmd
     op_run_command sudo systemctl stop comma $@
   fi
-}
-
-function op_proc() {
-  op_before_cmd
-
-  if [ -z "$1" ]; then
-    echo -e "${BOLD}${UNDERLINE}Usage:${NC} op proc <MODULE_PATH> [ARGS...]"
-    echo ""
-    echo "  Restart an openpilot process by its Python module path."
-    echo "  Kills any existing instance and starts it fresh."
-    echo ""
-    echo -e "${BOLD}${UNDERLINE}Examples:${NC}"
-    echo "  op proc system.webrtc.webrtcd"
-    echo "  op proc system.webrtc.webrtcd --port 5002"
-    echo "  op proc selfdrive.ui.ui"
-    return 1
-  fi
-
-  MODULE="$1"
-  shift
-  ARGS="$@"
-
-  # convert dots to slashes for matching against process cmdlines
-  MODULE_AS_PATH="${MODULE//\.//}"
-
-  # find and kill existing processes matching this module
-  PIDS=$(pgrep -f "(python.*${MODULE}|python.*${MODULE_AS_PATH}|${MODULE_AS_PATH})" 2>/dev/null || true)
-  # filter out our own PID and parent shell
-  PIDS=$(echo "$PIDS" | grep -v "^$$\$" | grep -v "^$PPID\$" | tr '\n' ' ' | xargs)
-
-  if [[ -n "$PIDS" ]]; then
-    echo -e " ↳ Stopping existing process(es): ${BOLD}${PIDS}${NC}"
-    kill -INT $PIDS 2>/dev/null || true
-    # wait up to 5 seconds for graceful shutdown
-    for i in $(seq 1 50); do
-      REMAINING=$(echo "$PIDS" | tr ' ' '\n' | while read p; do
-        [ -n "$p" ] && kill -0 "$p" 2>/dev/null && echo "$p"
-      done | tr '\n' ' ' | xargs)
-      if [[ -z "$REMAINING" ]]; then
-        break
-      fi
-      sleep 0.1
-    done
-    # force kill any stragglers
-    if [[ -n "$REMAINING" ]]; then
-      echo -e " ↳ Force killing: ${BOLD}${REMAINING}${NC}"
-      kill -9 $REMAINING 2>/dev/null || true
-      sleep 0.5
-    fi
-    echo -e " ↳ [${GREEN}✔${NC}] Stopped."
-  else
-    echo -e " ↳ No existing process found for ${BOLD}${MODULE}${NC}"
-  fi
-
-  echo -e " ↳ Starting ${BOLD}${MODULE}${NC}..."
-  op_run_command python -m "$MODULE" $ARGS
 }
 
 function op_default() {
@@ -499,9 +513,9 @@ function op_default() {
   echo -e "  ${BOLD}build${NC}        Run the openpilot build system in the current working directory"
   echo -e "  ${BOLD}install${NC}      Install the 'op' tool system wide"
   echo -e "  ${BOLD}switch${NC}       Switch to a different git branch with a clean slate (nukes any changes)"
+  echo -e "  ${BOLD}restart${NC}      Restart a managed Python process (e.g. op restart system.webrtc.webrtcd)"
   echo -e "  ${BOLD}start${NC}        Starts (or restarts) openpilot"
   echo -e "  ${BOLD}stop${NC}         Stops openpilot"
-  echo -e "  ${BOLD}proc${NC}         Restart an individual process by module path (e.g. system.webrtc.webrtcd)"
   echo ""
   echo -e "${BOLD}${UNDERLINE}Commands [Tooling]:${NC}"
   echo -e "  ${BOLD}juggle${NC}       Run PlotJuggler"
@@ -570,7 +584,6 @@ function _op() {
     start )         shift 1; op_start "$@" ;;
     stop )          shift 1; op_stop "$@" ;;
     restart )       shift 1; op_restart "$@" ;;
-    proc )          shift 1; op_proc "$@" ;;
     post-commit )   shift 1; op_install_post_commit "$@" ;;
     adb )           shift 1; op_adb "$@" ;;
     ssh )           shift 1; op_ssh "$@" ;;
