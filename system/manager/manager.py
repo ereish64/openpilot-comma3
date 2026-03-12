@@ -14,7 +14,7 @@ from openpilot.common.params import Params, ParamKeyFlag
 from openpilot.common.text_window import TextWindow
 from openpilot.system.hardware import HARDWARE
 from openpilot.system.manager.helpers import unblock_stdout, write_onroad_params, save_bootlog
-from openpilot.system.manager.process import ensure_running, PythonProcess
+from openpilot.system.manager.process import ensure_running
 from openpilot.system.manager.process_config import managed_processes
 from openpilot.system.athena.registration import register, UNREGISTERED_DONGLE_ID
 from openpilot.common.swaglog import cloudlog, add_file_handler
@@ -148,20 +148,14 @@ def manager_thread() -> None:
     started_prev = started
     ignition_prev = ignition
 
-    # check for process restart requests
-    restart_name = params.get("ProcessRestart")
-    if restart_name is not None:
-      params.remove("ProcessRestart")
-      name = restart_name.decode().strip()
-      p = managed_processes.get(name)
-      if p is not None and p.proc is not None:
-        cloudlog.warning(f"Restarting {name} by request")
-        if isinstance(p, PythonProcess):
-          p.restart_with_reload()
-        else:
-          p.restart()
-
     ensure_running(managed_processes.values(), started, params=params, CP=sm['carParams'], not_run=ignore)
+
+    # Handle process restart requests from CLI
+    restart_name = params.get("ProcessRestart", encoding='utf-8')
+    if restart_name and restart_name in managed_processes:
+      cloudlog.warning(f"Restarting {restart_name} by request")
+      managed_processes[restart_name].restart()
+      params.remove("ProcessRestart")
 
     running = ' '.join("{}{}\u001b[0m".format("\u001b[32m" if p.proc.is_alive() else "\u001b[31m", p.name)
                        for p in managed_processes.values() if p.proc)

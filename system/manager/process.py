@@ -1,7 +1,6 @@
 import importlib
 import os
 import signal
-import sys
 import time
 import subprocess
 from collections.abc import Callable, ValuesView
@@ -199,14 +198,6 @@ class PythonProcess(ManagerProcess):
     self.proc = Process(name=name, target=self.launcher, args=(self.module, self.name))
     self.proc.start()
     self.shutting_down = False
-
-  def restart_with_reload(self) -> None:
-    self.stop(sig=signal.SIGKILL)
-    # invalidate cached modules so the new code is picked up after fork
-    to_remove = [key for key in sys.modules if key == self.module or key.startswith(self.module + '.')]
-    for key in to_remove:
-      del sys.modules[key]
-    self.start()
 
 
 class DaemonProcess(ManagerProcess):
