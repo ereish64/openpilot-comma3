@@ -150,13 +150,6 @@ def manager_thread() -> None:
 
     ensure_running(managed_processes.values(), started, params=params, CP=sm['carParams'], not_run=ignore)
 
-    # Handle process restart requests from CLI
-    restart_name = params.get("ProcessRestart", encoding='utf-8')
-    if restart_name and restart_name in managed_processes:
-      cloudlog.warning(f"Restarting {restart_name} by request")
-      managed_processes[restart_name].restart()
-      params.remove("ProcessRestart")
-
     running = ' '.join("{}{}\u001b[0m".format("\u001b[32m" if p.proc.is_alive() else "\u001b[31m", p.name)
                        for p in managed_processes.values() if p.proc)
     print(running)
