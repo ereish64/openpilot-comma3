@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#define GL_GLEXT_PROTOTYPES
 #include <SDL_opengl.h>
 
 #include "common/util.h"
@@ -20,24 +21,24 @@
 
 // Map from enum to bootstrap icon ID string
 static const char *kIconNames[static_cast<int>(BootstrapIcon::_Count)] = {
-  "play",
-  "pause",
-  "rewind",
-  "fast-forward",
-  "skip-end",
+  "play-fill",
+  "pause-fill",
+  "rewind-fill",
+  "fast-forward-fill",
+  "skip-end-fill",
   "skip-end-fill",
   "repeat",
   "x",
   "x-lg",
-  "pencil",
+  "pencil-fill",
   "plus",
   "dash",
-  "gear",
+  "gear-fill",
   "graph-up",
   "arrow-counterclockwise",
   "arrow-clockwise",
   "zoom-out",
-  "info-circle",
+  "info-circle-fill",
   "chevron-left",
   "chevron-right",
   "file-earmark-ruled",
@@ -118,11 +119,12 @@ static GLuint rasterizeToTexture(NSVGrasterizer *rast, const std::string &svg_st
   GLuint tex = 0;
   glGenTextures(1, &tex);
   glBindTexture(GL_TEXTURE_2D, tex);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, px, px, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+  glGenerateMipmap(GL_TEXTURE_2D);
   glBindTexture(GL_TEXTURE_2D, 0);
 
   return tex;
