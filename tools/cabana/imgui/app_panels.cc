@@ -23,6 +23,37 @@
 
 namespace {
 constexpr std::array<float, 11> kPlaybackSpeeds = {0.01f, 0.02f, 0.05f, 0.1f, 0.2f, 0.5f, 0.8f, 1.0f, 2.0f, 3.0f, 5.0f};
+
+ImVec2 fitImageSize(const ImVec2 &bounds, float aspect) {
+  aspect = std::max(aspect, 1e-3f);
+  ImVec2 size(bounds.x, bounds.x / aspect);
+  if (size.y > bounds.y) {
+    size.y = bounds.y;
+    size.x = size.y * aspect;
+  }
+  return size;
+}
+
+void cropFillUvs(float source_aspect, float container_aspect, bool mirror_x, ImVec2 *uv0, ImVec2 *uv1) {
+  source_aspect = std::max(source_aspect, 1e-3f);
+  container_aspect = std::max(container_aspect, 1e-3f);
+
+  float u0 = 0.0f, u1 = 1.0f, v0 = 0.0f, v1 = 1.0f;
+  if (source_aspect > container_aspect) {
+    const float visible_u = std::clamp(container_aspect / source_aspect, 0.0f, 1.0f);
+    const float inset = (1.0f - visible_u) * 0.5f;
+    u0 = inset;
+    u1 = 1.0f - inset;
+  } else {
+    const float visible_v = std::clamp(source_aspect / container_aspect, 0.0f, 1.0f);
+    const float inset = (1.0f - visible_v) * 0.5f;
+    v0 = inset;
+    v1 = 1.0f - inset;
+  }
+
+  *uv0 = ImVec2(mirror_x ? u1 : u0, v0);
+  *uv1 = ImVec2(mirror_x ? u0 : u1, v1);
+}
 }  // namespace
 
 double CabanaImguiApp::timelineSecFromMouseX(double min_sec, double max_sec, float slider_x, float slider_w, float mouse_x) const {
@@ -134,13 +165,12 @@ void CabanaImguiApp::drawMessagesPanel(const ImVec2 &size) {
   ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY |
                           ImGuiTableFlags_ScrollX | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
                           ImGuiTableFlags_Hideable | ImGuiTableFlags_Reorderable;
-  if (ImGui::BeginTable("MessagesTable", 7, flags, ImVec2(0, 0))) {
+  if (ImGui::BeginTable("MessagesTable", 6, flags, ImVec2(0, 0))) {
     ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_NoHide);
     ImGui::TableSetupColumn("Bus", ImGuiTableColumnFlags_WidthFixed, 52.0f);
     ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 72.0f);
     ImGui::TableSetupColumn("Node", ImGuiTableColumnFlags_WidthFixed, 86.0f);
     ImGui::TableSetupColumn("Freq", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-    ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, 70.0f);
     ImGui::TableSetupColumn("Bytes", ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_NoSort);
     ImGui::TableSetupScrollFreeze(0, 2);
     ImGui::TableHeadersRow();
@@ -166,9 +196,6 @@ void CabanaImguiApp::drawMessagesPanel(const ImVec2 &size) {
     ImGui::InputTextWithHint("##f_freq", "Hz", col_filter_freq_.data(), col_filter_freq_.size());
     ImGui::TableSetColumnIndex(5);
     ImGui::SetNextItemWidth(-FLT_MIN);
-    ImGui::InputTextWithHint("##f_cnt", "Cnt", col_filter_count_.data(), col_filter_count_.size());
-    ImGui::TableSetColumnIndex(6);
-    ImGui::SetNextItemWidth(-FLT_MIN);
     ImGui::InputTextWithHint("##f_bytes", "Bytes", col_filter_bytes_.data(), col_filter_bytes_.size());
 
     if (ImGuiTableSortSpecs *sort_specs = ImGui::TableGetSortSpecs(); sort_specs && sort_specs->SpecsCount > 0) {
@@ -186,9 +213,8 @@ void CabanaImguiApp::drawMessagesPanel(const ImVec2 &size) {
     const std::string f_addr(col_filter_addr_.data());
     const std::string f_node(col_filter_node_.data());
     const std::string f_freq(col_filter_freq_.data());
-    const std::string f_count(col_filter_count_.data());
     const std::string f_bytes(col_filter_bytes_.data());
-    const bool has_col_filters = !f_bus.empty() || !f_addr.empty() || !f_node.empty() || !f_freq.empty() || !f_count.empty() || !f_bytes.empty();
+    const bool has_col_filters = !f_bus.empty() || !f_addr.empty() || !f_node.empty() || !f_freq.empty() || !f_bytes.empty();
 
     auto match_range = [](const std::string &filter, double value) -> bool {
       if (filter.empty()) return true;
@@ -250,7 +276,6 @@ void CabanaImguiApp::drawMessagesPanel(const ImVec2 &size) {
         if (!f_addr.empty() && !match_hex(f_addr, item.id.address)) continue;
         if (!f_node.empty() && !icontains(item.node, f_node)) continue;
         if (!f_freq.empty() && !match_range(f_freq, item.freq)) continue;
-        if (!f_count.empty() && !match_range(f_count, item.count)) continue;
         if (!f_bytes.empty() && !icontains(item.data_hex, f_bytes)) continue;
         filtered_indices.push_back(i);
       }
@@ -335,8 +360,6 @@ void CabanaImguiApp::drawMessagesPanel(const ImVec2 &size) {
           ImGui::TextUnformatted("-");
         }
         ImGui::TableSetColumnIndex(5);
-        ImGui::TextUnformatted(is_dbc_only ? "N/A" : std::to_string(item.count).c_str());
-        ImGui::TableSetColumnIndex(6);
         if (is_dbc_only) {
           ImGui::TextUnformatted("N/A");
         } else {
@@ -446,117 +469,110 @@ void CabanaImguiApp::drawVideoPanel(const ImVec2 &size) {
   const float avail_width = ImGui::GetContentRegionAvail().x;
   const float controls_h = stream_ && !stream_->liveStreaming() ? 104.0f : 72.0f;
   const float avail_height = std::max(120.0f, ImGui::GetContentRegionAvail().y - controls_h);
+  const ImVec2 video_bounds(avail_width, avail_height);
+  const bool crop_video_to_fill = settings.video_crop_to_fill;
 
   ImDrawList *draw = ImGui::GetWindowDrawList();
   if (video_) {
-  const GLuint texture = video_->texture();
-  const ImVec2 tex_size = video_->textureSize();
-  const float aspect = texture != 0 && tex_size.x > 0.0f && tex_size.y > 0.0f ? tex_size.x / tex_size.y : 16.0f / 9.0f;
-  ImVec2 image_size(avail_width, avail_width / aspect);
-  if (image_size.y > avail_height) {
-    image_size.y = avail_height;
-    image_size.x = image_size.y * aspect;
-  }
-  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_width - image_size.x) * 0.5f);
-  if (texture != 0) {
-    // Match Qt's camera UV mapping (cameraview.cc:97):
-    // - Driver stream: horizontally mirrored (selfie cam)
-    // - Non-driver streams: no flip
-    const bool is_driver = video_->activeStream() == VISION_STREAM_DRIVER;
-    const ImVec2 uv0 = is_driver ? ImVec2(1, 0) : ImVec2(0, 0);
-    const ImVec2 uv1 = is_driver ? ImVec2(0, 1) : ImVec2(1, 1);
-    ImGui::Image((ImTextureID)(intptr_t)texture, image_size, uv0, uv1);
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-      stream_->pause(!paused);
+    const GLuint texture = video_->texture();
+    const ImVec2 tex_size = video_->textureSize();
+    const float aspect = texture != 0 && tex_size.x > 0.0f && tex_size.y > 0.0f ? tex_size.x / tex_size.y : 16.0f / 9.0f;
+    const ImVec2 image_size = crop_video_to_fill ? video_bounds : fitImageSize(video_bounds, aspect);
+    if (!crop_video_to_fill) {
+      ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_width - image_size.x) * 0.5f);
     }
-    video_rendered_this_frame_ = true;
-  } else {
-    ImGui::Dummy(image_size);
-  }
-  const ImVec2 image_min = ImGui::GetItemRectMin();
-  const ImVec2 image_max = ImGui::GetItemRectMax();
-  if (texture == 0) {
-    draw->AddRectFilled(image_min, image_max, IM_COL32(40, 40, 42, 255), 0.0f);
-    const char *waiting_text = "Waiting for camera frames...";
-    ImVec2 text_size = ImGui::CalcTextSize(waiting_text);
-    draw->AddText(ImVec2((image_min.x + image_max.x - text_size.x) * 0.5f, (image_min.y + image_max.y - text_size.y) * 0.5f),
-                  IM_COL32(187, 187, 187, 255), waiting_text);
-  }
-  if (Replay *r = replay()) {
-    if (auto alert = r->findAlertAtTime(stream_->currentSec())) {
-      drawAlertOverlay(draw, *alert, image_min.x + 8.0f, image_min.y + 8.0f, image_size.x - 16.0f);
+    if (texture != 0) {
+      const bool is_driver = video_->activeStream() == VISION_STREAM_DRIVER;
+      ImVec2 uv0 = is_driver ? ImVec2(1, 0) : ImVec2(0, 0);
+      ImVec2 uv1 = is_driver ? ImVec2(0, 1) : ImVec2(1, 1);
+      if (crop_video_to_fill) {
+        cropFillUvs(aspect, video_bounds.x / video_bounds.y, is_driver, &uv0, &uv1);
+      }
+      ImGui::Image((ImTextureID)(intptr_t)texture, image_size, uv0, uv1);
+      if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+        stream_->pause(!paused);
+      }
+      video_rendered_this_frame_ = true;
+    } else {
+      ImGui::Dummy(image_size);
     }
-  }
-  drawPausedOverlay(image_min, image_max);
-  // Scrub/hover thumbnail (Qt shows full-size only when paused, small otherwise)
-  {
-    double hover_sec = timeline_hover_sec_ >= 0 ? timeline_hover_sec_ : chart_hover_sec_;
-    if (hover_sec >= 0 && !thumbnails_.empty() && stream_) {
-      uint64_t hover_mono = stream_->toMonoTime(hover_sec);
-      auto it = thumbnails_.upper_bound(hover_mono);
-      if (it != thumbnails_.begin()) {
-        --it;
-        auto &thumb = it->second;
-        if (thumb.tex_id) {
-          const bool is_paused = stream_->isPaused();
-          float thumb_aspect = static_cast<float>(thumb.width) / std::max(1, thumb.height);
-          if (is_paused) {
-            // Full-size scrub thumbnail when paused (matching Qt)
-            ImVec2 fill_size = image_size;
-            if (fill_size.x / fill_size.y > thumb_aspect) {
-              fill_size.x = fill_size.y * thumb_aspect;
-            } else {
-              fill_size.y = fill_size.x / thumb_aspect;
-            }
-            ImVec2 fill_pos((image_min.x + image_max.x - fill_size.x) * 0.5f,
-                            (image_min.y + image_max.y - fill_size.y) * 0.5f);
-            draw->AddRectFilled(image_min, image_max, IM_COL32(0, 0, 0, 200), 0.0f);
-            draw->AddImage((ImTextureID)(intptr_t)thumb.tex_id, fill_pos,
-                           ImVec2(fill_pos.x + fill_size.x, fill_pos.y + fill_size.y));
-            std::string time_label = formatTime(hover_sec, false);
-            ImVec2 label_size = ImGui::CalcTextSize(time_label.c_str());
-            draw->AddRectFilled(ImVec2(fill_pos.x, fill_pos.y + fill_size.y - label_size.y - 8),
-                                ImVec2(fill_pos.x + label_size.x + 12, fill_pos.y + fill_size.y),
-                                IM_COL32(0, 0, 0, 160), 3.0f);
-            draw->AddText(ImVec2(fill_pos.x + 6, fill_pos.y + fill_size.y - label_size.y - 4),
-                          IM_COL32(255, 255, 255, 220), time_label.c_str());
-            if (Replay *r = replay()) {
-              if (auto alert = r->findAlertAtTime(hover_sec)) {
-                drawAlertOverlay(draw, *alert, fill_pos.x + 8.0f, fill_pos.y + 8.0f, fill_size.x - 16.0f);
+    const ImVec2 image_min = ImGui::GetItemRectMin();
+    const ImVec2 image_max = ImGui::GetItemRectMax();
+    if (texture == 0) {
+      draw->AddRectFilled(image_min, image_max, IM_COL32(40, 40, 42, 255), 0.0f);
+      const char *waiting_text = "Waiting for camera frames...";
+      ImVec2 text_size = ImGui::CalcTextSize(waiting_text);
+      draw->AddText(ImVec2((image_min.x + image_max.x - text_size.x) * 0.5f, (image_min.y + image_max.y - text_size.y) * 0.5f),
+                    IM_COL32(187, 187, 187, 255), waiting_text);
+    }
+    if (Replay *r = replay()) {
+      if (auto alert = r->findAlertAtTime(stream_->currentSec())) {
+        drawAlertOverlay(draw, *alert, image_min.x + 8.0f, image_min.y + 8.0f, image_size.x - 16.0f);
+      }
+    }
+    drawPausedOverlay(image_min, image_max);
+    {
+      double hover_sec = timeline_hover_sec_ >= 0 ? timeline_hover_sec_ : chart_hover_sec_;
+      if (hover_sec >= 0 && !thumbnails_.empty() && stream_) {
+        uint64_t hover_mono = stream_->toMonoTime(hover_sec);
+        auto it = thumbnails_.upper_bound(hover_mono);
+        if (it != thumbnails_.begin()) {
+          --it;
+          auto &thumb = it->second;
+          if (thumb.tex_id) {
+            const bool is_paused = stream_->isPaused();
+            float thumb_aspect = static_cast<float>(thumb.width) / std::max(1, thumb.height);
+            if (is_paused) {
+              ImVec2 fill_size = crop_video_to_fill ? image_size : fitImageSize(image_size, thumb_aspect);
+              ImVec2 fill_pos((image_min.x + image_max.x - fill_size.x) * 0.5f,
+                              (image_min.y + image_max.y - fill_size.y) * 0.5f);
+              ImVec2 thumb_uv0(0, 0);
+              ImVec2 thumb_uv1(1, 1);
+              if (crop_video_to_fill) {
+                cropFillUvs(thumb_aspect, image_size.x / image_size.y, false, &thumb_uv0, &thumb_uv1);
               }
+              draw->AddRectFilled(image_min, image_max, IM_COL32(0, 0, 0, 200), 0.0f);
+              draw->AddImage((ImTextureID)(intptr_t)thumb.tex_id, fill_pos,
+                             ImVec2(fill_pos.x + fill_size.x, fill_pos.y + fill_size.y), thumb_uv0, thumb_uv1);
+              std::string time_label = formatTime(hover_sec, false);
+              ImVec2 label_size = ImGui::CalcTextSize(time_label.c_str());
+              draw->AddRectFilled(ImVec2(fill_pos.x, fill_pos.y + fill_size.y - label_size.y - 8),
+                                  ImVec2(fill_pos.x + label_size.x + 12, fill_pos.y + fill_size.y),
+                                  IM_COL32(0, 0, 0, 160), 3.0f);
+              draw->AddText(ImVec2(fill_pos.x + 6, fill_pos.y + fill_size.y - label_size.y - 4),
+                            IM_COL32(255, 255, 255, 220), time_label.c_str());
+              if (Replay *r = replay()) {
+                if (auto alert = r->findAlertAtTime(hover_sec)) {
+                  drawAlertOverlay(draw, *alert, fill_pos.x + 8.0f, fill_pos.y + 8.0f, fill_size.x - 16.0f);
+                }
+              }
+            } else {
+              float tw = static_cast<float>(thumb.width);
+              float th = static_cast<float>(thumb.height);
+              auto [min_sec, max_sec] = std::make_pair(stream_->minSeconds(), stream_->maxSeconds());
+              float pos_frac = (max_sec > min_sec) ? static_cast<float>((hover_sec - min_sec) / (max_sec - min_sec)) : 0.5f;
+              float pos_x = image_min.x + pos_frac * image_size.x;
+              float tx = std::clamp(pos_x - tw * 0.5f, image_min.x + 4.0f, image_max.x - tw - 4.0f);
+              float ty = image_max.y - th - 8.0f;
+              draw->AddRect(ImVec2(tx - 1, ty - 1), ImVec2(tx + tw + 1, ty + th + 1), IM_COL32(255, 255, 255, 255));
+              draw->AddImage((ImTextureID)(intptr_t)thumb.tex_id, ImVec2(tx, ty), ImVec2(tx + tw, ty + th));
+              std::string time_label = formatTime(hover_sec, false);
+              ImVec2 label_size = ImGui::CalcTextSize(time_label.c_str());
+              draw->AddRectFilled(ImVec2(tx, ty + th - label_size.y - 6),
+                                  ImVec2(tx + label_size.x + 10, ty + th),
+                                  IM_COL32(0, 0, 0, 160), 3.0f);
+              draw->AddText(ImVec2(tx + 5, ty + th - label_size.y - 3),
+                            IM_COL32(255, 255, 255, 220), time_label.c_str());
             }
-          } else {
-            // Small hover thumbnail when playing — position tracks hovered time (matching Qt)
-            float tw = static_cast<float>(thumb.width);
-            float th = static_cast<float>(thumb.height);
-            auto [min_sec, max_sec] = std::make_pair(stream_->minSeconds(), stream_->maxSeconds());
-            float pos_frac = (max_sec > min_sec) ? static_cast<float>((hover_sec - min_sec) / (max_sec - min_sec)) : 0.5f;
-            float pos_x = image_min.x + pos_frac * image_size.x;
-            float tx = std::clamp(pos_x - tw * 0.5f, image_min.x + 4.0f, image_max.x - tw - 4.0f);
-            float ty = image_max.y - th - 8.0f;
-            draw->AddRect(ImVec2(tx - 1, ty - 1), ImVec2(tx + tw + 1, ty + th + 1), IM_COL32(255, 255, 255, 255));
-            draw->AddImage((ImTextureID)(intptr_t)thumb.tex_id, ImVec2(tx, ty), ImVec2(tx + tw, ty + th));
-            std::string time_label = formatTime(hover_sec, false);
-            ImVec2 label_size = ImGui::CalcTextSize(time_label.c_str());
-            draw->AddRectFilled(ImVec2(tx, ty + th - label_size.y - 6),
-                                ImVec2(tx + label_size.x + 10, ty + th),
-                                IM_COL32(0, 0, 0, 160), 3.0f);
-            draw->AddText(ImVec2(tx + 5, ty + th - label_size.y - 3),
-                          IM_COL32(255, 255, 255, 220), time_label.c_str());
           }
         }
       }
     }
-  }
   } else if (Replay *r = replay()) {
-    // No video surface (e.g. --no-vipc), but still show alert overlay (matches Qt behavior)
-    const float aspect = 16.0f / 9.0f;
-    ImVec2 image_size(avail_width, avail_width / aspect);
-    if (image_size.y > avail_height) {
-      image_size.y = avail_height;
-      image_size.x = image_size.y * aspect;
+    const ImVec2 image_size = crop_video_to_fill ? video_bounds : fitImageSize(video_bounds, 16.0f / 9.0f);
+    if (!crop_video_to_fill) {
+      ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_width - image_size.x) * 0.5f);
     }
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_width - image_size.x) * 0.5f);
     ImGui::Dummy(image_size);
     const ImVec2 image_min = ImGui::GetItemRectMin();
     const ImVec2 image_max = ImGui::GetItemRectMax();

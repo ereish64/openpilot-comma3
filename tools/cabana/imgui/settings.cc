@@ -45,6 +45,7 @@ void Settings::load() {
   if (j["sparkline_range"].is_number()) sparkline_range = j["sparkline_range"].int_value();
   if (j["multiple_lines_hex"].is_bool()) multiple_lines_hex = j["multiple_lines_hex"].bool_value();
   if (j["log_livestream"].is_bool()) log_livestream = j["log_livestream"].bool_value();
+  if (j["video_crop_to_fill"].is_bool()) video_crop_to_fill = j["video_crop_to_fill"].bool_value();
   if (j["suppress_defined_signals"].is_bool()) suppress_defined_signals = j["suppress_defined_signals"].bool_value();
   if (j["log_path"].is_string()) log_path = j["log_path"].string_value();
   if (j["last_dir"].is_string()) last_dir = j["last_dir"].string_value();
@@ -79,6 +80,7 @@ void Settings::save() {
     {"sparkline_range", sparkline_range},
     {"multiple_lines_hex", multiple_lines_hex},
     {"log_livestream", log_livestream},
+    {"video_crop_to_fill", video_crop_to_fill},
     {"suppress_defined_signals", suppress_defined_signals},
     {"log_path", log_path},
     {"last_dir", last_dir},

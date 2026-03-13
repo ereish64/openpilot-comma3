@@ -286,7 +286,6 @@ private:
   std::array<char, 64> col_filter_addr_ = {};
   std::array<char, 64> col_filter_node_ = {};
   std::array<char, 64> col_filter_freq_ = {};
-  std::array<char, 64> col_filter_count_ = {};
   std::array<char, 64> col_filter_bytes_ = {};
   std::string hovered_signal_name_;
   std::string selected_signal_name_;
@@ -326,6 +325,7 @@ private:
   int settings_drag_direction_ = 0;
   int settings_theme_ = 0;
   bool settings_log_livestream_ = true;
+  bool settings_video_crop_to_fill_ = true;
   std::array<char, 256> settings_log_path_ = {};
 
   // Native ImGui Find Similar Bits dialog state

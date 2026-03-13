@@ -11,7 +11,8 @@ Import('replay_lib')
 
 # ---- Cabana build ----
 cabana_env = env.Clone()
-cabana_env['CPPPATH'] += [imgui.INCLUDE_DIR, imgui.SRC_DIR, nanosvg.INCLUDE_DIR]
+raylib_root = cabana_env.Dir('#third_party/raylib').abspath
+cabana_env['CPPPATH'] += [imgui.INCLUDE_DIR, imgui.SRC_DIR, nanosvg.INCLUDE_DIR, raylib_root + '/include']
 opendbc_path = '-DOPENDBC_FILE_PATH=\'"%s"\'' % (cabana_env.Dir("../../opendbc/dbc").abspath)
 cabana_env['CXXFLAGS'] += [opendbc_path, '-DImDrawIdx=unsigned']
 
@@ -63,14 +64,13 @@ imgui_core_lib = cabana_env.Library("cabana_imgui_core_lib", imgui_core_objs, LI
 
 cabana_app_env = cabana_env.Clone()
 cabana_app_env['LINKFLAGS'].append('-Wl,-strip-debug')
+cabana_app_env['LIBPATH'] += [f'{raylib_root}/{arch}/']
 if arch == "Darwin":
-  cabana_app_env.ParseConfig('pkg-config --cflags --libs glfw3')
   cabana_frameworks = ['Cocoa', 'IOKit', 'CoreVideo', 'OpenGL']
 else:
-  cabana_app_env.ParseConfig('pkg-config --cflags --libs glfw3')
   cabana_frameworks = []
 
-cabana_libs = ['glfw', 'json11', 'jpeg'] + cabana_base_libs
+cabana_libs = ['raylib', 'json11', 'jpeg'] + cabana_base_libs
 if arch != "Darwin":
   cabana_libs += ['GL', 'dl', 'rt']
   cabana_app_env['LINKFLAGS'] += ['-Wl,--start-group']

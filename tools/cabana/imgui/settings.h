@@ -37,6 +37,7 @@ public:
   int sparkline_range = 15;
   bool multiple_lines_hex = false;
   bool log_livestream = true;
+  bool video_crop_to_fill = true;
   bool suppress_defined_signals = false;
   std::string log_path;
   std::string last_dir;

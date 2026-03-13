@@ -922,6 +922,7 @@ void CabanaImguiApp::draw() {
     if (ImGui::BeginMenu("View")) {
       ImGui::MenuItem("Messages", nullptr, &show_messages_);
       ImGui::MenuItem("Video", nullptr, &show_video_);
+      ImGui::MenuItem("Crop Video to Fill", nullptr, &settings.video_crop_to_fill);
       ImGui::MenuItem("Charts", nullptr, &show_charts_);
       ImGui::MenuItem("Float Charts", nullptr, &charts_floating_);
       ImGui::Separator();
@@ -1204,6 +1205,8 @@ void CabanaImguiApp::draw() {
     const char *theme_items[] = {"Auto", "Light", "Dark"};
     ImGui::Combo("##theme", &settings_theme_, theme_items, IM_ARRAYSIZE(theme_items));
 
+    ImGui::Checkbox("Crop Video to Fill", &settings_video_crop_to_fill_);
+
     ImGui::Checkbox("Log Livestream", &settings_log_livestream_);
     if (settings_log_livestream_) {
       ImGui::SameLine();
@@ -1233,6 +1236,7 @@ void CabanaImguiApp::draw() {
         applyCabanaTheme(settings.theme, cabanaUiScale());
       }
       settings.log_livestream = settings_log_livestream_;
+      settings.video_crop_to_fill = settings_video_crop_to_fill_;
       settings.log_path = settings_log_path_.data();
       settings.emitChanged();
       setStatusMessage("Settings updated");

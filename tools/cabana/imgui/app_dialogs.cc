@@ -567,6 +567,7 @@ void CabanaImguiApp::drawSettingsDialog() {
   settings_drag_direction_ = static_cast<int>(settings.drag_direction);
   settings_theme_ = settings.theme;
   settings_log_livestream_ = settings.log_livestream;
+  settings_video_crop_to_fill_ = settings.video_crop_to_fill;
   std::strncpy(settings_log_path_.data(), settings.log_path.c_str(), settings_log_path_.size() - 1);
 }
 
@@ -1144,19 +1145,6 @@ void CabanaImguiApp::loadUiState() {
         if (!cs.series.empty()) {
           tab.charts.push_back(std::move(cs));
           next_chart_id_ = std::max(next_chart_id_, tab.charts.back().id + 1);
-        }
-      }
-      // Backwards compat: load old "signals" format as individual charts for selected_id
-      if (tab.charts.empty() && !tab_j["signals"].array_items().empty()) {
-        for (const auto &name : tab_j["signals"].array_items()) {
-          ChartState cs;
-          cs.id = next_chart_id_++;
-          cs.series_type = tab_j["series"].int_value();
-          ChartSeriesRef ref;
-          ref.msg_id = selected_id_;
-          ref.signal_name = name.string_value();
-          cs.series.push_back(std::move(ref));
-          tab.charts.push_back(std::move(cs));
         }
       }
       chart_tabs_.push_back(std::move(tab));

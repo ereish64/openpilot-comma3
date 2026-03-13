@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
+#include <limits>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -16,14 +19,54 @@ static std::string baseName(const std::string &path) {
   return p.stem().string();
 }
 
-// Helper: replace all occurrences
-static std::string replaceAll(const std::string &s, const std::string &from, const std::string &to) {
-  std::string result = s;
-  size_t pos = 0;
-  while ((pos = result.find(from, pos)) != std::string::npos) {
-    result.replace(pos, from.size(), to);
-    pos += to.size();
+static std::string escapeDBCText(const std::string &s) {
+  std::string result;
+  result.reserve(s.size());
+  for (char c : s) {
+    if (c == '\\' || c == '"') result.push_back('\\');
+    result.push_back(c);
   }
+  return result;
+}
+
+static std::string unescapeDBCText(const std::string &s) {
+  std::string result;
+  result.reserve(s.size());
+  bool escape = false;
+  for (char c : s) {
+    if (escape) {
+      result.push_back(c);
+      escape = false;
+    } else if (c == '\\') {
+      escape = true;
+    } else {
+      result.push_back(c);
+    }
+  }
+  if (escape) result.push_back('\\');
+  return result;
+}
+
+static std::string formatValDescNumber(double value) {
+  if (std::isfinite(value)) {
+    const double rounded = std::round(value);
+    const double eps = 1e-9 * std::max(1.0, std::abs(value));
+    if (std::abs(value - rounded) <= eps) {
+      char buf[64];
+      std::snprintf(buf, sizeof(buf), "%.0f", rounded);
+      return buf;
+    }
+  }
+
+  std::ostringstream oss;
+  oss << std::fixed << std::setprecision(std::numeric_limits<double>::digits10) << value;
+  std::string result = oss.str();
+  auto dot = result.find('.');
+  if (dot != std::string::npos) {
+    while (!result.empty() && result.back() == '0') result.pop_back();
+    if (!result.empty() && result.back() == '.') result.pop_back();
+  }
+  if (result == "-0") result = "0";
   return result;
 }
 
@@ -203,7 +246,7 @@ void DBCFile::parseSG(const std::string &line, cabana::Msg *current_msg, int &mu
   cabana::Signal s{};
   if (offset == 1) {
     auto indicator = match[2].str();
-    if (indicator == "M") {
+    if (indicator == "M" || indicator == "m") {
       ++multiplexor_cnt;
       if (multiplexor_cnt >= 2)
         throw std::runtime_error("Multiple multiplexor");
@@ -235,7 +278,7 @@ void DBCFile::parseCM_BO(const std::string &line) {
     throw std::runtime_error("Invalid message comment format");
 
   if (auto m = msg(std::stoul(match[1].str())))
-    m->comment = util::strip(replaceAll(match[2].str(), "\\\"", "\""));
+    m->comment = util::strip(unescapeDBCText(match[2].str()));
 }
 
 void DBCFile::parseCM_SG(const std::string &line) {
@@ -246,45 +289,61 @@ void DBCFile::parseCM_SG(const std::string &line) {
     throw std::runtime_error("Invalid CM_ SG_ line format");
 
   if (auto s = signal(std::stoul(match[1].str()), match[2].str())) {
-    s->comment = util::strip(replaceAll(match[3].str(), "\\\"", "\""));
+    s->comment = util::strip(unescapeDBCText(match[3].str()));
   }
 }
 
 void DBCFile::parseVAL(const std::string &line) {
-  static std::regex val_regexp(R"(VAL_ (\w+) (\w+) (\s*[-+]?[0-9]+\s+\".+?\"[^;]*))");
+  static std::regex val_regexp(R"(^VAL_\s+(\w+)\s+(\w+)\s+(.*?)\s*;?\s*$)");
 
   std::smatch match;
   if (!std::regex_search(line, match, val_regexp))
     throw std::runtime_error("invalid VAL_ line format");
 
   if (auto s = signal(std::stoul(match[1].str()), match[2].str())) {
-    // Split by quotes to get value-description pairs
     std::string desc_str = util::strip(match[3].str());
-    // Parse pairs: number "description" number "description" ...
     size_t pos = 0;
     while (pos < desc_str.size()) {
-      // Skip whitespace
       while (pos < desc_str.size() && std::isspace(desc_str[pos])) ++pos;
       if (pos >= desc_str.size()) break;
 
-      // Read number
-      size_t num_start = pos;
-      while (pos < desc_str.size() && !std::isspace(desc_str[pos]) && desc_str[pos] != '"') ++pos;
-      std::string num_str = util::strip(desc_str.substr(num_start, pos - num_start));
-      if (num_str.empty()) break;
+      char *end = nullptr;
+      const char *begin = desc_str.c_str() + pos;
+      double raw = std::strtod(begin, &end);
+      if (end == begin) {
+        throw std::runtime_error("invalid VAL_ numeric value");
+      }
+      pos = end - desc_str.c_str();
 
-      // Skip whitespace
       while (pos < desc_str.size() && std::isspace(desc_str[pos])) ++pos;
-      if (pos >= desc_str.size() || desc_str[pos] != '"') break;
-      ++pos; // skip opening quote
+      if (pos >= desc_str.size() || desc_str[pos] != '"') {
+        throw std::runtime_error("invalid VAL_ description format");
+      }
+      ++pos;
 
-      // Read description until closing quote
-      size_t desc_start = pos;
-      while (pos < desc_str.size() && desc_str[pos] != '"') ++pos;
-      std::string desc = desc_str.substr(desc_start, pos - desc_start);
-      if (pos < desc_str.size()) ++pos; // skip closing quote
+      std::string desc;
+      bool escape = false;
+      bool closed = false;
+      for (; pos < desc_str.size(); ++pos) {
+        char c = desc_str[pos];
+        if (escape) {
+          desc.push_back(c);
+          escape = false;
+        } else if (c == '\\') {
+          escape = true;
+        } else if (c == '"') {
+          ++pos;
+          closed = true;
+          break;
+        } else {
+          desc.push_back(c);
+        }
+      }
+      if (!closed) {
+        throw std::runtime_error("unterminated VAL_ description");
+      }
 
-      s->val_desc.push_back({std::stod(num_str), util::strip(desc)});
+      s->val_desc.push_back({raw, util::strip(desc)});
     }
   }
 }
@@ -295,7 +354,7 @@ std::string DBCFile::generateDBC() {
     const std::string &transmitter = m.transmitter.empty() ? DEFAULT_NODE_NAME : m.transmitter;
     dbc_string += "BO_ " + std::to_string(address) + " " + m.name + ": " + std::to_string(m.size) + " " + transmitter + "\n";
     if (!m.comment.empty()) {
-      std::string escaped_comment = replaceAll(m.comment, "\"", "\\\"");
+      std::string escaped_comment = escapeDBCText(m.comment);
       comment += "CM_ BO_ " + std::to_string(address) + " \"" + escaped_comment + "\";\n";
     }
     for (auto sig : m.getSignals()) {
@@ -312,18 +371,16 @@ std::string DBCFile::generateDBC() {
                     std::string(1, sig->is_signed ? '-' : '+') +
                     " (" + doubleToString(sig->factor) + "," + doubleToString(sig->offset) + ")" +
                     " [" + doubleToString(sig->min) + "|" + doubleToString(sig->max) + "]" +
-                    " \"" + sig->unit + "\" " + recv + "\n";
+                    " \"" + escapeDBCText(sig->unit) + "\" " + recv + "\n";
       if (!sig->comment.empty()) {
-        std::string escaped_comment = replaceAll(sig->comment, "\"", "\\\"");
+        std::string escaped_comment = escapeDBCText(sig->comment);
         comment += "CM_ SG_ " + std::to_string(address) + " " + sig->name + " \"" + escaped_comment + "\";\n";
       }
       if (!sig->val_desc.empty()) {
         std::string text;
         for (auto &[val, desc] : sig->val_desc) {
           if (!text.empty()) text += " ";
-          char val_buf[64];
-          snprintf(val_buf, sizeof(val_buf), "%g", val);
-          text += std::string(val_buf) + " \"" + desc + "\"";
+          text += formatValDescNumber(val) + " \"" + escapeDBCText(desc) + "\"";
         }
         val_desc += "VAL_ " + std::to_string(address) + " " + sig->name + " " + text + ";\n";
       }

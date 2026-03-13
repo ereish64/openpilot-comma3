@@ -892,6 +892,13 @@ void CabanaImguiApp::drawChartPanel(const ImVec2 &size) {
       // Track points using "last sample at or before hover time" semantics (skip hidden series)
       if (show_track) {
         ImDrawList *draw = ImPlot::GetPlotDrawList();
+        struct HoverAnnotation {
+          ImVec2 point;
+          ImU32 color;
+          std::string text;
+        };
+        std::vector<HoverAnnotation> annotations;
+        annotations.reserve(series.size());
         for (int si = 0; si < static_cast<int>(series.size()); ++si) {
           const auto &ps = series[si];
           bool hidden = si < static_cast<int>(chart.hidden.size()) && chart.hidden[si];
@@ -905,9 +912,55 @@ void CabanaImguiApp::drawChartPanel(const ImVec2 &size) {
             const auto *m = dbc()->msg(ps.ref.msg_id);
             const auto *s = m ? m->sig(ps.ref.signal_name) : nullptr;
             std::string val = s ? s->formatValue(ps.ys[idx], false) : std::to_string(ps.ys[idx]);
-            std::string annotation = val + "  " + formatTime(ps.xs[idx], false);
-            ImPlot::Annotation(ps.xs[idx], ps.ys[idx], imColor(ps.color), ImVec2(10, -10), true, "%s", annotation.c_str());
+            annotations.push_back({.point = pos,
+                                   .color = packedColor(ps.color),
+                                   .text = val + "  " + formatTime(ps.xs[idx], false)});
           }
+        }
+
+        std::sort(annotations.begin(), annotations.end(), [](const auto &a, const auto &b) {
+          return a.point.y < b.point.y;
+        });
+
+        struct LabelRect {
+          float x1, y1, x2, y2;
+        };
+        std::vector<LabelRect> placed_rects;
+        placed_rects.reserve(annotations.size());
+        const float label_pad_x = 6.0f;
+        const float label_pad_y = 4.0f;
+        const float label_gap = 4.0f;
+        for (const auto &annotation : annotations) {
+          const ImVec2 text_size = ImGui::CalcTextSize(annotation.text.c_str());
+          const float box_w = text_size.x + label_pad_x * 2.0f;
+          const float box_h = text_size.y + label_pad_y * 2.0f;
+          const float box_x = std::clamp(annotation.point.x + 12.0f,
+                                         plot_min_x + 2.0f,
+                                         std::max(plot_min_x + 2.0f, plot_max_x - box_w - 2.0f));
+          float box_y = std::clamp(annotation.point.y - box_h * 0.5f,
+                                   plot_min_y + 2.0f,
+                                   std::max(plot_min_y + 2.0f, plot_max_y - box_h - 2.0f));
+
+          auto overlaps = [&](float y) {
+            for (const auto &rect : placed_rects) {
+              if (!(box_x + box_w <= rect.x1 || box_x >= rect.x2 || y + box_h <= rect.y1 || y >= rect.y2)) {
+                return true;
+              }
+            }
+            return false;
+          };
+
+          while (overlaps(box_y) && box_y + box_h + label_gap <= plot_max_y - 2.0f) {
+            box_y += label_gap;
+          }
+          while (overlaps(box_y) && box_y - label_gap >= plot_min_y + 2.0f) {
+            box_y -= label_gap;
+          }
+
+          const ImVec2 offset(box_x - annotation.point.x + label_pad_x, box_y - annotation.point.y + label_pad_y);
+          ImPlot::Annotation(ImPlot::PixelsToPlot(annotation.point).x, ImPlot::PixelsToPlot(annotation.point).y,
+                             ImColor(annotation.color), offset, true, "%s", annotation.text.c_str());
+          placed_rects.push_back({box_x, box_y, box_x + box_w, box_y + box_h});
         }
       }
 
