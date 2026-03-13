@@ -51,12 +51,6 @@ public:
   int window_height = 0;
   bool window_maximized = false;
 
-  // session data
-  std::string recent_dbc_file;
-  std::string active_msg_id;
-  std::vector<std::string> selected_msg_ids;
-  std::vector<std::string> active_charts;
-
   // Callback registration for change notification
   std::vector<std::function<void()>> on_changed_;
 };

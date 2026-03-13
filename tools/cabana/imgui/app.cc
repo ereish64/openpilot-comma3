@@ -815,10 +815,9 @@ void CabanaImguiApp::draw() {
                     auto state = readPersistentState();
                     state.last_dir = fs::path(fn).parent_path().string();
                     rememberRecentFile(state, fn, 15);
-                    state.session.recent_dbc_file = fn;
                     writePersistentState(state);
                     setStatusMessage("DBC loaded for Bus " + std::to_string(src));
-                    loadUiState();  // Re-run session restore (Qt fires restoreSessionState on every DBCFileChanged)
+                    loadUiState();
                   }
                 };
                 if (hasNativeFileDialogs()) {

@@ -685,20 +685,10 @@ CabanaPersistentState readPersistentState() {
   return {
     .last_dir = settings.last_dir,
     .recent_files = settings.recent_files,
-    .session = {
-      .recent_dbc_file = settings.recent_dbc_file,
-      .active_msg_id = settings.active_msg_id,
-      .selected_msg_ids = settings.selected_msg_ids,
-      .active_charts = settings.active_charts,
-    },
   };
 }
 
 void writePersistentState(const CabanaPersistentState &state) {
   settings.last_dir = state.last_dir;
   settings.recent_files = state.recent_files;
-  settings.recent_dbc_file = state.session.recent_dbc_file;
-  settings.active_msg_id = state.session.active_msg_id;
-  settings.selected_msg_ids = state.session.selected_msg_ids;
-  settings.active_charts = state.session.active_charts;
 }

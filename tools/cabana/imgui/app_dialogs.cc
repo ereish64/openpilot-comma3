@@ -653,10 +653,8 @@ bool CabanaImguiApp::loadDbcFile(const std::string &filename, const SourceSet &s
   auto state = readPersistentState();
   state.last_dir = fpath.parent_path().string();
   rememberRecentFile(state, filename, 15);
-  state.session.recent_dbc_file = filename;
   writePersistentState(state);
   setStatusMessage("DBC loaded: " + fpath.filename().string());
-  // Re-run session restore — Qt schedules restoreSessionState() on every DBCFileChanged
   loadUiState();
   return true;
 }
@@ -669,7 +667,7 @@ void CabanaImguiApp::loadDbcFromClipboard(const SourceSet &sources) {
   std::string error;
   if (dbc()->open(sources, std::string(), clip_str, &error) && dbc()->nonEmptyDBCCount() > 0) {
     setStatusMessage("DBC loaded from clipboard");
-    loadUiState();  // Match Qt: restoreSessionState fires on DBCFileChanged for all load paths
+    loadUiState();
     return;
   }
 
@@ -761,7 +759,6 @@ void CabanaImguiApp::saveDbc(bool save_as) {
     auto state = readPersistentState();
     state.last_dir = pathDirname(fn);
     rememberRecentFile(state, fn, 15);
-    state.session.recent_dbc_file = fn;
     writePersistentState(state);
     setStatusMessage("DBC saved: " + pathBasename(fn));
   };
@@ -820,7 +817,7 @@ void CabanaImguiApp::saveDbc(bool save_as) {
     const std::string default_dir = settings.last_dir.empty() ? homeDir() : settings.last_dir;
     const std::string title = "Save File (bus: " + toString(dbc()->sources(dbc_file)) + ")";
     showImguiSaveDialog(title, default_dir, "untitled.dbc", ".dbc",
-      [this, save_one, dbc_file, save_next, idx](const std::string &fn) {
+      [save_one, dbc_file, save_next, idx](const std::string &fn) {
         save_one(dbc_file, fn);
         (*save_next)(idx + 1);
       });
@@ -891,9 +888,6 @@ void CabanaImguiApp::ensureAutoDbcLoaded() {
   const std::string dbc_path = std::string(OPENDBC_FILE_PATH) + "/" + dbc_name;
   dbc()->open(SOURCE_ALL, dbc_path, &error);
   if (error.empty()) {
-    // Update shared recent_dbc_file so Qt<->ImGui session handoff works correctly
-    settings.recent_dbc_file = dbc_path;
-    // Match Qt: restoreSessionState() fires on every DBCFileChanged, including auto-load
     loadUiState();
   }
 }
@@ -1082,11 +1076,8 @@ void CabanaImguiApp::loadUiState() {
     if (!j["layout_right_top"].is_null()) layout_right_top_frac_ = static_cast<float>(j["layout_right_top"].number_value());
   }
 
-  // Match Qt's restoreSessionState: use firstOpenDbcFile (first non-empty DBC filename)
-  // so multi-DBC sessions can still restore. Qt uses canRestoreSession() which compares
-  // the saved recent_dbc_file against the first open DBC filename.
-  if (dbc()->nonEmptyDBCCount() == 0) return;
-  const std::string saved_dbc = has_sidecar ? j["recent_dbc_file"].string_value() : settings.recent_dbc_file;
+  if (!has_sidecar || dbc()->nonEmptyDBCCount() == 0) return;
+  const std::string saved_dbc = j["recent_dbc_file"].string_value();
   std::string current_dbc;
   for (auto *f : dbc()->allDBCFiles()) {
     if (!f->isEmpty() && !f->filename.empty()) { current_dbc = f->filename; break; }
@@ -1094,19 +1085,18 @@ void CabanaImguiApp::loadUiState() {
   const bool dbc_matches = !saved_dbc.empty() && !current_dbc.empty() && saved_dbc == current_dbc;
 
   if (dbc_matches) {
-    if (!settings.active_msg_id.empty()) {
-      selected_id_ = MessageId::fromString(settings.active_msg_id);
+    if (j["active_msg_id"].is_string() && !j["active_msg_id"].string_value().empty()) {
+      selected_id_ = MessageId::fromString(j["active_msg_id"].string_value());
       has_selected_id_ = true;
     }
     detail_tabs_.clear();
-    for (const auto &id : settings.selected_msg_ids) {
-      detail_tabs_.push_back(MessageId::fromString(id));
+    for (const auto &id_j : j["selected_msg_ids"].array_items()) {
+      if (id_j.is_string()) detail_tabs_.push_back(MessageId::fromString(id_j.string_value()));
     }
   }
 
   chart_tabs_.clear();
-  bool charts_restored = false;
-  if (dbc_matches && has_sidecar) {
+  if (dbc_matches) {
     for (const auto &tab_j : j["chart_tabs"].array_items()) {
       ChartTabState tab;
       tab.id = tab_j["id"].int_value();
@@ -1120,7 +1110,7 @@ void CabanaImguiApp::loadUiState() {
           if (sep != std::string::npos) {
             MessageId msg_id = MessageId::fromString(s.substr(0, sep));
             std::string sig_name = s.substr(sep + 1);
-            // Validate signal still exists in DBC (matching Qt's restoreChartsFromIds)
+            // Validate that the signal still exists in the current DBC.
             if (auto *m = dbc()->msg(msg_id)) {
               if (m->sig(sig_name)) {
                 cs.series.push_back({msg_id, sig_name});
@@ -1150,35 +1140,6 @@ void CabanaImguiApp::loadUiState() {
       next_chart_tab_id_ = std::max(next_chart_tab_id_, chart_tabs_.back().id + 1);
     }
     active_chart_tab_ = j["active_chart_tab"].int_value();
-    charts_restored = !chart_tabs_.empty();
-  }
-  // Fallback: restore charts from settings.active_charts (shared with Qt)
-  // Qt serializes charts in reverse order (chartswidget.cc:334), so reverse back to original order
-  if (!charts_restored && dbc_matches && !settings.active_charts.empty()) {
-    ensureChartTabs();
-    auto &charts = currentCharts();
-    auto reversed_charts = settings.active_charts;
-    std::reverse(reversed_charts.begin(), reversed_charts.end());
-    for (const auto &chart_id_str : reversed_charts) {
-      // Format: comma-separated "MessageId|signal_name" pairs within a chart
-      ChartState cs;
-      cs.id = next_chart_id_++;
-      cs.series_type = settings.chart_series_type;
-      std::istringstream parts(chart_id_str);
-      std::string part;
-      while (std::getline(parts, part, ',')) {
-        auto sep = part.find('|');
-        if (sep == std::string::npos) continue;
-        MessageId msg_id = MessageId::fromString(part.substr(0, sep));
-        std::string sig_name = part.substr(sep + 1);
-        if (auto *m = dbc()->msg(msg_id)) {
-          if (m->sig(sig_name)) {
-            cs.series.push_back({msg_id, sig_name});
-          }
-        }
-      }
-      if (!cs.series.empty()) charts.push_back(std::move(cs));
-    }
   }
 }
 
@@ -1187,32 +1148,6 @@ void CabanaImguiApp::saveUiState() const {
   settings.suppress_defined_signals = suppress_defined_signals_;
   settings.multiple_lines_hex = multiline_bytes_;
   settings.chart_column_count = chart_columns_;
-  if (has_selected_id_) {
-    settings.active_msg_id = selected_id_.toString();
-  } else {
-    settings.active_msg_id.clear();
-  }
-  settings.selected_msg_ids.clear();
-  for (const auto &id : detail_tabs_) settings.selected_msg_ids.push_back(id.toString());
-
-  // Sync shared recent_dbc_file so Qt<->ImGui session handoff is reliable
-  for (auto *f : dbc()->allDBCFiles()) {
-    if (!f->isEmpty() && !f->filename.empty()) { settings.recent_dbc_file = f->filename; break; }
-  }
-
-  // Write shared active_charts in Qt-compatible format (reversed, matching Qt's serialization)
-  settings.active_charts.clear();
-  for (const auto &tab : chart_tabs_) {
-    for (const auto &chart : tab.charts) {
-      std::string chart_str;
-      for (size_t i = 0; i < chart.series.size(); ++i) {
-        if (i > 0) chart_str += ',';
-        chart_str += chart.series[i].msg_id.toString() + "|" + chart.series[i].signal_name;
-      }
-      if (!chart_str.empty()) settings.active_charts.push_back(chart_str);
-    }
-  }
-  std::reverse(settings.active_charts.begin(), settings.active_charts.end());
 
   std::vector<json11::Json> tabs_j;
   for (const auto &tab : chart_tabs_) {
@@ -1233,6 +1168,8 @@ void CabanaImguiApp::saveUiState() const {
       {"charts", charts_j},
     });
   }
+  json11::Json::array selected_msg_ids_j;
+  for (const auto &id : detail_tabs_) selected_msg_ids_j.push_back(id.toString());
   json11::Json state = json11::Json::object{
     {"chart_tabs", tabs_j},
     {"active_chart_tab", active_chart_tab_},
@@ -1244,12 +1181,13 @@ void CabanaImguiApp::saveUiState() const {
     {"layout_center", static_cast<double>(layout_center_frac_)},
     {"layout_center_top", static_cast<double>(layout_center_top_frac_)},
     {"layout_right_top", static_cast<double>(layout_right_top_frac_)},
-    // Match Qt: save the first non-empty DBC filename (not settings.recent_dbc_file which can drift)
-    {"recent_dbc_file", [this]() -> std::string {
+    {"active_msg_id", has_selected_id_ ? json11::Json(selected_id_.toString()) : json11::Json("")},
+    {"selected_msg_ids", selected_msg_ids_j},
+    {"recent_dbc_file", []() -> std::string {
       for (auto *f : dbc()->allDBCFiles()) {
         if (!f->isEmpty() && !f->filename.empty()) return f->filename;
       }
-      return settings.recent_dbc_file;
+      return {};
     }()},
   };
   std::ofstream ofs(imguiStateFilePath());

@@ -6,7 +6,6 @@
 #include "tools/cabana/core/launch_config.h"
 #include "tools/cabana/imgui/bootstrap.h"
 #include "tools/cabana/imgui/dbcmanager.h"
-#include "tools/cabana/imgui/settings.h"
 #include "tools/cabana/imgui/stream.h"
 #include "tools/cabana/imgui/util.h"
 #include "tools/cabana/imgui/app.h"
@@ -47,9 +46,6 @@ int main(int argc, char *argv[]) {
     dbc()->open(SOURCE_ALL, parsed.config.dbc_file, &dbc_error);
     if (!dbc_error.empty()) {
       std::cerr << "Failed to load DBC file '" << parsed.config.dbc_file << "': " << dbc_error << "\n";
-    } else {
-      // Update recent_dbc_file so session restore works correctly
-      settings.recent_dbc_file = parsed.config.dbc_file;
     }
   }
 

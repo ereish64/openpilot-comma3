@@ -1,8 +1,5 @@
 #include "tools/cabana/imgui/settings.h"
 
-#include <algorithm>
-#include <cstdlib>
-#include <filesystem>
 #include <fstream>
 #include <sstream>
 
@@ -15,83 +12,12 @@ static std::string settingsPath() {
   return homeDir() + "/.cabana_settings.json";
 }
 
-// One-time migration from Qt QSettings ("cabana") INI format to our JSON format.
-// QSettings("cabana") on Linux writes to ~/.config/cabana.conf in INI format.
-static void migrateFromQtSettings(Settings &s) {
-  std::string qt_path = homeDir() + "/.config/cabana.conf";
-  if (!std::filesystem::exists(qt_path)) return;
-
-  std::ifstream f(qt_path);
-  if (!f.is_open()) return;
-
-  // Simple INI parser for QSettings format: "key=value" lines, ignoring sections like [General]
-  std::string line;
-  while (std::getline(f, line)) {
-    // Remove trailing \r
-    if (!line.empty() && line.back() == '\r') line.pop_back();
-    // Skip section headers and empty lines
-    if (line.empty() || line[0] == '[' || line[0] == '#') continue;
-    auto eq = line.find('=');
-    if (eq == std::string::npos) continue;
-    std::string key = line.substr(0, eq);
-    std::string val = line.substr(eq + 1);
-
-    // Helper to split QSettings string list values (QStringList uses \x1f separator in INI)
-    auto splitQtList = [](const std::string &v) -> std::vector<std::string> {
-      std::vector<std::string> result;
-      std::string item;
-      for (char c : v) {
-        if (c == '\x1f') {
-          if (!item.empty()) result.push_back(item);
-          item.clear();
-        } else {
-          item += c;
-        }
-      }
-      if (!item.empty()) result.push_back(item);
-      return result;
-    };
-
-    if (key == "theme" && !val.empty()) s.theme = std::stoi(val);
-    else if (key == "fps" && !val.empty()) s.fps = std::stoi(val);
-    else if (key == "max_cached_minutes" && !val.empty()) s.max_cached_minutes = std::stoi(val);
-    else if (key == "chart_height" && !val.empty()) s.chart_height = std::stoi(val);
-    else if (key == "chart_range" && !val.empty()) s.chart_range = std::stoi(val);
-    else if (key == "chart_column_count" && !val.empty()) s.chart_column_count = std::stoi(val);
-    else if (key == "chart_series_type" && !val.empty()) s.chart_series_type = std::stoi(val);
-    else if (key == "last_dir" && !val.empty()) s.last_dir = val;
-    else if (key == "last_route_dir" && !val.empty()) s.last_route_dir = val;
-    else if (key == "log_path" && !val.empty()) s.log_path = val;
-    else if (key == "drag_direction" && !val.empty()) s.drag_direction = static_cast<Settings::DragDirection>(std::stoi(val));
-    else if (key == "multiple_lines_hex") s.multiple_lines_hex = (val == "true");
-    else if (key == "log_livestream") s.log_livestream = (val == "true");
-    else if (key == "suppress_defined_signals") s.suppress_defined_signals = (val == "true");
-    else if (key == "absolute_time") s.absolute_time = (val == "true");
-    else if (key == "sparkline_range" && !val.empty()) s.sparkline_range = std::stoi(val);
-    else if (key == "recent_dbc_file" && !val.empty()) s.recent_dbc_file = val;
-    else if (key == "active_msg_id" && !val.empty()) s.active_msg_id = val;
-    else if (key == "recent_files" && !val.empty()) s.recent_files = splitQtList(val);
-    else if (key == "selected_msg_ids" && !val.empty()) s.selected_msg_ids = splitQtList(val);
-    else if (key == "active_charts" && !val.empty()) s.active_charts = splitQtList(val);
-  }
-}
-
 Settings::Settings() {
   std::string home_dir = homeDir();
   last_dir = home_dir;
   last_route_dir = home_dir;
   log_path = home_dir + "/cabana_live_stream/";
   load();
-  // Re-import from Qt QSettings whenever the Qt file is newer than our JSON file,
-  // keeping settings in sync while both apps coexist during migration.
-  std::string json_path = settingsPath();
-  std::string qt_path = home_dir + "/.config/cabana.conf";
-  if (std::filesystem::exists(qt_path)) {
-    if (!std::filesystem::exists(json_path) ||
-        std::filesystem::last_write_time(qt_path) > std::filesystem::last_write_time(json_path)) {
-      migrateFromQtSettings(*this);
-    }
-  }
 }
 
 Settings::~Settings() {
@@ -129,31 +55,17 @@ void Settings::load() {
   if (j["window_width"].is_number()) window_width = j["window_width"].int_value();
   if (j["window_height"].is_number()) window_height = j["window_height"].int_value();
   if (j["window_maximized"].is_bool()) window_maximized = j["window_maximized"].bool_value();
-  if (j["recent_dbc_file"].is_string()) recent_dbc_file = j["recent_dbc_file"].string_value();
-  if (j["active_msg_id"].is_string()) active_msg_id = j["active_msg_id"].string_value();
 
   if (j["recent_files"].is_array()) {
     recent_files.clear();
     for (const auto &item : j["recent_files"].array_items())
       if (item.is_string()) recent_files.push_back(item.string_value());
   }
-  if (j["selected_msg_ids"].is_array()) {
-    selected_msg_ids.clear();
-    for (const auto &item : j["selected_msg_ids"].array_items())
-      if (item.is_string()) selected_msg_ids.push_back(item.string_value());
-  }
-  if (j["active_charts"].is_array()) {
-    active_charts.clear();
-    for (const auto &item : j["active_charts"].array_items())
-      if (item.is_string()) active_charts.push_back(item.string_value());
-  }
 }
 
 void Settings::save() {
-  json11::Json::array rf_arr, sm_arr, ac_arr;
+  json11::Json::array rf_arr;
   for (const auto &s : recent_files) rf_arr.push_back(s);
-  for (const auto &s : selected_msg_ids) sm_arr.push_back(s);
-  for (const auto &s : active_charts) ac_arr.push_back(s);
 
   json11::Json j = json11::Json::object {
     {"absolute_time", absolute_time},
@@ -177,11 +89,7 @@ void Settings::save() {
     {"window_width", window_width},
     {"window_height", window_height},
     {"window_maximized", window_maximized},
-    {"recent_dbc_file", recent_dbc_file},
-    {"active_msg_id", active_msg_id},
     {"recent_files", rf_arr},
-    {"selected_msg_ids", sm_arr},
-    {"active_charts", ac_arr},
   };
 
   std::ofstream f(settingsPath());
