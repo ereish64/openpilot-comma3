@@ -45,6 +45,8 @@ void applyCabanaTheme(int theme, float scale);
 void loadCabanaFonts();
 ImFont *cabanaBoldFont();
 ImFont *cabanaMonoFont();
+void pushQtTabBarStyle();
+void popQtTabBarStyle();
 bool saveScreenshot(const std::string &path, int width, int height);
 bool signalFitsInMessage(const cabana::Signal &sig, int msg_size_bytes);
 int nextAvailableSignalBit(const cabana::Msg *msg, int msg_size_bytes);

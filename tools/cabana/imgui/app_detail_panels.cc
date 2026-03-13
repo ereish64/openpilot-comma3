@@ -1060,68 +1060,72 @@ void CabanaImguiApp::drawBinaryPanel(const ImVec2 &size) {
   ImGui::TextUnformatted("Detail");
   ImGui::SameLine();
   if (has_selected_id_) ImGui::TextDisabled("%s", selected_id_.toString().c_str());
-  if (!detail_tabs_.empty() && ImGui::BeginTabBar("message_tabs", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_FittingPolicyResizeDown)) {
-    int remove_index = -1;
-    int close_other_index = -1;
-    for (int i = 0; i < static_cast<int>(detail_tabs_.size()); ++i) {
-      MessageId id = detail_tabs_[i];
-      const auto *msg = dbc()->msg(id);
-      const std::string id_str = id.toString();
-      const std::string name = msg ? msg->name : msgName(id);
-      bool open = true;
-      ImGuiTabItemFlags flags = pending_tab_select_ && has_selected_id_ && selected_id_ == id ? ImGuiTabItemFlags_SetSelected : 0;
-      // Use MessageId as tab label (matching Qt), with message name as tooltip
-      ImGui::PushID(id_str.c_str());
-      if (ImGui::BeginTabItem(id_str.c_str(), &open, flags)) {
-        if (!pending_tab_select_) {
-          selected_id_ = id;
-          has_selected_id_ = true;
+  if (!detail_tabs_.empty()) {
+    pushQtTabBarStyle();
+    if (ImGui::BeginTabBar("message_tabs", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_FittingPolicyResizeDown)) {
+      int remove_index = -1;
+      int close_other_index = -1;
+      for (int i = 0; i < static_cast<int>(detail_tabs_.size()); ++i) {
+        MessageId id = detail_tabs_[i];
+        const auto *msg = dbc()->msg(id);
+        const std::string id_str = id.toString();
+        const std::string name = msg ? msg->name : msgName(id);
+        bool open = true;
+        ImGuiTabItemFlags flags = pending_tab_select_ && has_selected_id_ && selected_id_ == id ? ImGuiTabItemFlags_SetSelected : 0;
+        // Use MessageId as tab label (matching Qt), with message name as tooltip
+        ImGui::PushID(id_str.c_str());
+        if (ImGui::BeginTabItem(id_str.c_str(), &open, flags)) {
+          if (!pending_tab_select_) {
+            selected_id_ = id;
+            has_selected_id_ = true;
+          }
+          ImGui::EndTabItem();
         }
-        ImGui::EndTabItem();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", name.c_str());
+        if (ImGui::BeginPopupContextItem("msg_tab_ctx")) {
+          if (ImGui::MenuItem("Edit Message...")) {
+            selected_id_ = id;
+            has_selected_id_ = true;
+            openMessageEditor();
+          }
+          if (ImGui::MenuItem("Export CSV...")) {
+            exportToCsvDialog(id);
+          }
+          ImGui::Separator();
+          if (ImGui::MenuItem("Close Tab")) {
+            remove_index = i;
+          }
+          if (ImGui::MenuItem("Close Other Tabs", nullptr, false, detail_tabs_.size() > 1)) {
+            close_other_index = i;
+          }
+          ImGui::EndPopup();
+        }
+        if (!open) remove_index = i;
+        ImGui::PopID();
       }
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", name.c_str());
-      if (ImGui::BeginPopupContextItem("msg_tab_ctx")) {
-        if (ImGui::MenuItem("Edit Message...")) {
-          selected_id_ = id;
-          has_selected_id_ = true;
-          openMessageEditor();
-        }
-        if (ImGui::MenuItem("Export CSV...")) {
-          exportToCsvDialog(id);
-        }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Close Tab")) {
-          remove_index = i;
-        }
-        if (ImGui::MenuItem("Close Other Tabs", nullptr, false, detail_tabs_.size() > 1)) {
-          close_other_index = i;
-        }
-        ImGui::EndPopup();
+      if (close_other_index >= 0) {
+        MessageId keep = detail_tabs_[close_other_index];
+        detail_tabs_.assign(1, keep);
+        selected_id_ = keep;
+        has_selected_id_ = true;
       }
-      if (!open) remove_index = i;
-      ImGui::PopID();
-    }
-    if (close_other_index >= 0) {
-      MessageId keep = detail_tabs_[close_other_index];
-      detail_tabs_.assign(1, keep);
-      selected_id_ = keep;
-      has_selected_id_ = true;
-    }
-    if (remove_index >= 0) {
-      const bool removing_selected = has_selected_id_ && detail_tabs_[remove_index] == selected_id_;
-      detail_tabs_.erase(detail_tabs_.begin() + remove_index);
-      if (removing_selected) {
-        if (!detail_tabs_.empty()) {
-          selected_id_ = detail_tabs_[std::min(remove_index, static_cast<int>(detail_tabs_.size()) - 1)];
-        } else {
-          has_selected_id_ = false;
-          selected_id_ = {};
+      if (remove_index >= 0) {
+        const bool removing_selected = has_selected_id_ && detail_tabs_[remove_index] == selected_id_;
+        detail_tabs_.erase(detail_tabs_.begin() + remove_index);
+        if (removing_selected) {
+          if (!detail_tabs_.empty()) {
+            selected_id_ = detail_tabs_[std::min(remove_index, static_cast<int>(detail_tabs_.size()) - 1)];
+          } else {
+            has_selected_id_ = false;
+            selected_id_ = {};
+          }
         }
+        ensureDetailTabs();
       }
-      ensureDetailTabs();
+      pending_tab_select_ = false;
+      ImGui::EndTabBar();
     }
-    pending_tab_select_ = false;
-    ImGui::EndTabBar();
+    popQtTabBarStyle();
   }
   ImGui::Separator();
 

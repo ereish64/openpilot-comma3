@@ -1,6 +1,7 @@
 import os
 
 import imgui
+import nanosvg
 
 Import('env', 'arch', 'common', 'messaging', 'visionipc', 'cereal')
 
@@ -10,7 +11,7 @@ Import('replay_lib')
 
 # ---- Cabana build ----
 cabana_env = env.Clone()
-cabana_env['CPPPATH'] += [imgui.INCLUDE_DIR, imgui.SRC_DIR]
+cabana_env['CPPPATH'] += [imgui.INCLUDE_DIR, imgui.SRC_DIR, nanosvg.INCLUDE_DIR]
 opendbc_path = '-DOPENDBC_FILE_PATH=\'"%s"\'' % (cabana_env.Dir("../../opendbc/dbc").abspath)
 cabana_env['CXXFLAGS'] += [opendbc_path, '-DImDrawIdx=unsigned']
 

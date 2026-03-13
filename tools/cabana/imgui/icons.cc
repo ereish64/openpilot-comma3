@@ -15,9 +15,9 @@
 #pragma GCC diagnostic ignored "-Wshadow"
 #pragma GCC diagnostic ignored "-Wshadow=compatible-local"
 #define NANOSVG_IMPLEMENTATION
-#include "third_party/nanosvg/nanosvg.h"
+#include "nanosvg.h"
 #define NANOSVGRAST_IMPLEMENTATION
-#include "third_party/nanosvg/nanosvgrast.h"
+#include "nanosvgrast.h"
 #pragma GCC diagnostic pop
 
 // Map from enum to bootstrap icon ID string

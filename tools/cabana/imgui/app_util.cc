@@ -504,6 +504,34 @@ static ImFont *s_mono_font = nullptr;
 ImFont *cabanaBoldFont() { return s_bold_font ? s_bold_font : ImGui::GetFont(); }
 ImFont *cabanaMonoFont() { return s_mono_font ? s_mono_font : ImGui::GetFont(); }
 
+void pushQtTabBarStyle() {
+  const auto mix = [](const ImVec4 &a, const ImVec4 &b, float t) {
+    return ImVec4(a.x + (b.x - a.x) * t,
+                  a.y + (b.y - a.y) * t,
+                  a.z + (b.z - a.z) * t,
+                  a.w + (b.w - a.w) * t);
+  };
+
+  const ImGuiStyle &style = ImGui::GetStyle();
+  const ImVec4 window_bg = style.Colors[ImGuiCol_WindowBg];
+  const ImVec4 frame_bg = style.Colors[ImGuiCol_FrameBg];
+  const ImVec4 frame_hovered = style.Colors[ImGuiCol_FrameBgHovered];
+  const ImVec4 border = style.Colors[ImGuiCol_Border];
+
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 4.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_Tab, mix(frame_bg, window_bg, 0.18f));
+  ImGui::PushStyleColor(ImGuiCol_TabHovered, mix(frame_hovered, window_bg, 0.12f));
+  ImGui::PushStyleColor(ImGuiCol_TabSelected, window_bg);
+  ImGui::PushStyleColor(ImGuiCol_Border, border);
+}
+
+void popQtTabBarStyle() {
+  ImGui::PopStyleColor(4);
+  ImGui::PopStyleVar(3);
+}
+
 void loadCabanaFonts() {
   ImGuiIO &io = ImGui::GetIO();
   io.Fonts->Clear();

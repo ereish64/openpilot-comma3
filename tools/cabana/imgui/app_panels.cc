@@ -676,6 +676,7 @@ void CabanaImguiApp::drawSignalsPanel(const ImVec2 &size) {
     return;
   }
 
+  pushQtTabBarStyle();
   if (ImGui::BeginTabBar("detail_tabs")) {
     if (ImGui::BeginTabItem("Msg")) {
       detail_tab_ = 0;
@@ -1213,6 +1214,7 @@ void CabanaImguiApp::drawSignalsPanel(const ImVec2 &size) {
     }
     ImGui::EndTabBar();
   }
+  popQtTabBarStyle();
 
   if (signal_editor_.open) {
     ImGui::OpenPopup(signal_editor_.editing_existing ? "Edit Signal" : "Add Signal");
