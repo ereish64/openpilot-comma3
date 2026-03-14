@@ -1,12 +1,6 @@
 #include "tools/cabana/imgui/app_util.h"
 
-#ifdef __APPLE__
-#include <OpenGL/gl3.h>
-#elif defined(IMGUI_IMPL_OPENGL_ES3)
-#include <GLES3/gl3.h>
-#else
-#include <GL/gl.h>
-#endif
+#include "imgui_impl_opengl3_loader.h"
 
 #include <algorithm>
 #include <cctype>

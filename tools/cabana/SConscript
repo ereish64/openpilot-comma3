@@ -15,8 +15,8 @@ cabana_env['CPPPATH'] += [imgui.INCLUDE_DIR, imgui.SRC_DIR, nanosvg.INCLUDE_DIR]
 opendbc_path = '-DOPENDBC_FILE_PATH=\'"%s"\'' % (cabana_env.Dir("../../opendbc/dbc").abspath)
 cabana_env['CXXFLAGS'] += [opendbc_path, '-DImDrawIdx=unsigned']
 
-if arch != "Darwin":
-  cabana_env['CXXFLAGS'] += ['-DIMGUI_IMPL_OPENGL_ES3']
+# Desktop GL 3.3 core — use imgui's built-in GL loader (imgui_impl_opengl3_loader.h)
+# instead of system GL/GLES headers, so cabana builds on headless CI too.
 imgui_sources = [
   f'{imgui.SRC_DIR}/imgui.cpp',
   f'{imgui.SRC_DIR}/imgui_draw.cpp',

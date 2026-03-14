@@ -1,12 +1,6 @@
 #pragma once
 
-#ifdef __APPLE__
-#include <OpenGL/gl3.h>
-#elif defined(IMGUI_IMPL_OPENGL_ES3)
-#include <GLES3/gl3.h>
-#else
-#include <GL/gl.h>
-#endif
+#include "imgui_impl_opengl3_loader.h"
 #include <atomic>
 #include <mutex>
 #include <set>
