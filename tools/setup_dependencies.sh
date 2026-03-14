@@ -115,14 +115,23 @@ function install_python_deps() {
 }
 
 function install_macos_deps() {
-  if ! command -v brew > /dev/null 2>&1; then
+  # Find brew even if /opt/homebrew has been removed from PATH
+  BREW=""
+  if command -v brew > /dev/null 2>&1; then
+    BREW=brew
+  elif [ -x /opt/homebrew/bin/brew ]; then
+    BREW=/opt/homebrew/bin/brew
+  fi
+
+  if [ -z "$BREW" ]; then
     echo "homebrew not found, skipping macOS system dependency install"
     return 0
   fi
 
   if ! command -v cmake > /dev/null 2>&1; then
-    brew install cmake
+    $BREW install cmake
   fi
+  $BREW install libusb
 }
 
 # --- Main ---

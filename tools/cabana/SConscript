@@ -61,6 +61,11 @@ cabana_backend_lib = cabana_env.Library("cabana_backend_lib", cabana_srcs + caba
 imgui_core_objs = [cabana_env.Object(target='cabana_' + os.path.splitext(os.path.basename(src))[0], source=src) for src in imgui_sources]
 imgui_core_lib = cabana_env.Library("cabana_imgui_core_lib", imgui_core_objs, LIBS=cabana_base_libs)
 
+if arch == "Darwin":
+  # Homebrew paths for libusb (brew may be removed from PATH on CI but packages are still installed)
+  cabana_env['CPPPATH'] += ['/opt/homebrew/include']
+  cabana_env['LIBPATH'] += ['/opt/homebrew/lib']
+
 cabana_app_env = cabana_env.Clone()
 cabana_app_env['LIBPATH'] += [imgui.LIB_DIR]
 cabana_libs = ['glfw3', 'json11', 'jpeg'] + cabana_base_libs
