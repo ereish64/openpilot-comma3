@@ -68,7 +68,7 @@ if arch == "Darwin":
   cabana_frameworks = ['Cocoa', 'IOKit', 'CoreVideo', 'OpenGL']
 else:
   cabana_frameworks = []
-  cabana_libs += ['GL', 'dl', 'rt']
+  cabana_libs += ['dl', 'rt']
   cabana_app_env['LINKFLAGS'] += ['-Wl,--strip-debug', '-Wl,--start-group']
   cabana_app_env['_LIBFLAGS'] = cabana_app_env.get('_LIBFLAGS', '') + ' -Wl,--end-group'
 
