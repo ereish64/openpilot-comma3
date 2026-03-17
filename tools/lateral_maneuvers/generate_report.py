@@ -17,7 +17,7 @@ from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.selfdrive.controls.lib.latcontrol_torque import LP_FILTER_CUTOFF_HZ
 from openpilot.tools.lib.logreader import LogReader
 from openpilot.system.hardware.hw import Paths
-from openpilot.common.constants import CV
+from openpilot.common.constants import ACCELERATION_DUE_TO_GRAVITY, CV
 
 
 def format_car_params(CP):
@@ -68,6 +68,10 @@ def report(platform, route, _description, CP, ID, maneuvers):
       t_lateralPlan = [(t - t_lateralPlan[0]) / 1e9 for t in t_lateralPlan]
       t_carOutput = [(t - t_carOutput[0]) / 1e9 for t in t_carOutput]
 
+      roll_values = [m.orientationNED[0] if len(m.orientationNED) == 3 else 0.0 for m in carControl]
+      roll_at_cs = np.interp(t_controlsState, t_carControl, roll_values)
+      roll_at_lp = np.interp(t_lateralPlan, t_carControl, roll_values)
+
       # maneuver validity
       latActive = [m.latActive for m in carControl]
       maneuver_valid = all(latActive) and not any(cs.steeringPressed for cs in carState)
@@ -77,17 +81,17 @@ def report(platform, route, _description, CP, ID, maneuvers):
 
       builder.append(f"<details {_open}><summary><h3 style='display: inline-block;'>{title}</h3></summary>\n")
 
-      baseline_accel = lat_accel(controlsState[0].curvature, carState[0].vEgo)
+      baseline_accel = lat_accel(controlsState[0].curvature, carState[0].vEgo) - roll_at_cs[0] * ACCELERATION_DUE_TO_GRAVITY
       v_ego = [m.vEgo for m in carState]
       cross_markers = []
 
       if description.startswith('sine'):
-        amplitude = max(abs(lat_accel(lp.desiredCurvature, v) - baseline_accel)
-                        for lp, v in zip(lateralPlan, v_ego, strict=False))
+        amplitude = max(abs(lat_accel(lp.desiredCurvature, v) - r * ACCELERATION_DUE_TO_GRAVITY - baseline_accel)
+                        for lp, v, r in zip(lateralPlan, v_ego, roll_at_lp, strict=False))
         threshold = amplitude * 0.5
         builder.append('<h3 style="font-weight: normal">50% peak')
-        for t, cs, v in zip(t_controlsState, controlsState, v_ego, strict=False):
-          actual = lat_accel(cs.curvature, v) - baseline_accel
+        for t, cs, v, r in zip(t_controlsState, controlsState, v_ego, roll_at_cs, strict=False):
+          actual = lat_accel(cs.curvature, v) - r * ACCELERATION_DUE_TO_GRAVITY - baseline_accel
           if abs(actual) > threshold:
             builder.append(f', <strong>crossed in {t:.3f}s</strong>')
             cross_markers.append((t, actual + baseline_accel))
@@ -98,10 +102,10 @@ def report(platform, route, _description, CP, ID, maneuvers):
           builder.append(', <strong>not crossed</strong>')
         builder.append('</h3>')
       else:
-        action_targets = [(0, lat_accel(lateralPlan[0].desiredCurvature, v_ego[0]) - baseline_accel)]
+        action_targets = [(0, lat_accel(lateralPlan[0].desiredCurvature, v_ego[0]) - roll_at_lp[0] * ACCELERATION_DUE_TO_GRAVITY - baseline_accel)]
         for i in range(1, min(len(lateralPlan), len(v_ego))):
           if abs(lateralPlan[i].desiredCurvature - lateralPlan[i - 1].desiredCurvature) > 0.001:
-            desired = lat_accel(lateralPlan[i].desiredCurvature, v_ego[i]) - baseline_accel
+            desired = lat_accel(lateralPlan[i].desiredCurvature, v_ego[i]) - roll_at_lp[i] * ACCELERATION_DUE_TO_GRAVITY - baseline_accel
             action_targets.append((i, desired))
 
         for j, (start_i, act_target) in enumerate(action_targets):
@@ -110,10 +114,10 @@ def report(platform, route, _description, CP, ID, maneuvers):
 
           builder.append(f'<h3 style="font-weight: normal">aTarget: {round(act_target, 1)} m/s^2')
           prev_crossed = False
-          for t, cs, v in zip(t_controlsState, controlsState, v_ego, strict=False):
+          for t, cs, v, r in zip(t_controlsState, controlsState, v_ego, roll_at_cs, strict=False):
             if not (start_time <= t <= end_time):
               continue
-            actual_accel = lat_accel(cs.curvature, v) - baseline_accel
+            actual_accel = lat_accel(cs.curvature, v) - r * ACCELERATION_DUE_TO_GRAVITY - baseline_accel
             crossed = (0 < act_target < actual_accel) or (0 > act_target > actual_accel)
             if crossed and prev_crossed:
               cross_time = t - start_time
@@ -132,14 +136,16 @@ def report(platform, route, _description, CP, ID, maneuvers):
       ax = fig.subplots(4, 1, sharex=True, gridspec_kw={'height_ratios': [5, 3, 3, 3]})
 
       ax[0].grid(linewidth=4)
-      desired_lat_accel = [lat_accel(m.desiredCurvature, v) for m, v in zip(lateralPlan, v_ego, strict=False)]
+      desired_lat_accel = [lat_accel(m.desiredCurvature, v) - r * ACCELERATION_DUE_TO_GRAVITY
+                           for m, v, r in zip(lateralPlan, v_ego, roll_at_lp, strict=False)]
       if description.startswith('sine'):
         ax[0].plot(t_lateralPlan[:len(desired_lat_accel)], desired_lat_accel, label='desired lat accel', linewidth=6)
       else:
         t_desired = [t_lateralPlan[0]] + t_lateralPlan[:len(desired_lat_accel)]
         desired_lat_accel = [baseline_accel] + desired_lat_accel
         ax[0].step(t_desired, desired_lat_accel, label='desired lat accel', linewidth=6, where='post')
-      actual_lat_accel = [lat_accel(cs.curvature, v) for cs, v in zip(controlsState, v_ego, strict=False)]
+      actual_lat_accel = [lat_accel(cs.curvature, v) - r * ACCELERATION_DUE_TO_GRAVITY
+                          for cs, v, r in zip(controlsState, v_ego, roll_at_cs, strict=False)]
       ax[0].plot(t_controlsState[:len(actual_lat_accel)], actual_lat_accel, label='actual lat accel', linewidth=6)
       ax[0].set_ylabel('Lateral Accel (m/s^2)')
 
