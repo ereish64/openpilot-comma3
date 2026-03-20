@@ -121,6 +121,11 @@ class Soundd:
       self.current_sound_frame = 0
 
   def get_audible_alert(self, sm):
+    if sm.updated['soundRequest']:
+      new_alert = sm['soundRequest'].sound.raw
+      if new_alert != AudibleAlert.none:
+        self.update_alert(new_alert)
+
     if sm.updated['selfdriveState']:
       new_alert = sm['selfdriveState'].alertSound.raw
       self.update_alert(new_alert)
@@ -146,7 +151,7 @@ class Soundd:
     # sounddevice must be imported after forking processes
     import sounddevice as sd
 
-    sm = messaging.SubMaster(['selfdriveState', 'soundPressure'])
+    sm = messaging.SubMaster(['selfdriveState', 'soundPressure', 'soundRequest'])
 
     with self.get_stream(sd) as stream:
       rk = Ratekeeper(20)
