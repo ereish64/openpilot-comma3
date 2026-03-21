@@ -5,7 +5,7 @@ DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd)"
 ROOT="$DIR/../../../"
 
 cd $DIR
-./update_translations.py --vanish
+./update_translations.py
 
 command -v codex >/dev/null || {
   echo "Install codex CLI to continue:"
