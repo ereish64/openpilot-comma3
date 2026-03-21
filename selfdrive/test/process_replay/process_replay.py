@@ -145,6 +145,7 @@ class ProcessContainer:
     self.cfg = copy.deepcopy(cfg)
     self.process = copy.deepcopy(managed_processes[cfg.proc_name])
     self.msg_queue: list[capnp._DynamicStructReader] = []
+    self.last_input_log_mono_time: int = 0
     self.cnt = 0
     self.pm: messaging.PubMaster | None = None
     self.sockets: list[messaging.SubSocket] | None = None
@@ -293,10 +294,11 @@ class ProcessContainer:
           trigger_empty_recv = any(m.which() == self.cfg.main_pub for m in self.msg_queue)
 
         # get output msgs from previous inputs
-        output_msgs = self.get_output_msgs(msg.logMonoTime)
+        output_msgs = self.get_output_msgs(self.last_input_log_mono_time)
 
         for m in self.msg_queue:
           self.pm.send(m.which(), m.as_builder())
+          self.last_input_log_mono_time = max(self.last_input_log_mono_time, m.logMonoTime)
           # send frames if needed
           if self.vipc_server is not None and m.which() in self.cfg.vision_pubs:
             camera_state = getattr(m, m.which())
