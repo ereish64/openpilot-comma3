@@ -20,5 +20,7 @@ Update openpilot UI translations in selfdrive/ui/translations.
 - Preserve placeholders (%n, %1, {}, {:.1f}), HTML/tags, and plural forms.
 - Edit .po files in place.
 - Print a short summary of changes.
+- All strings should be translated. Don't stop until it's 100%.
+- Be mindful of the layout/style of the UI and length of the original English string.
 EOF
 )"

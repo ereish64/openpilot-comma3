@@ -394,7 +394,7 @@ msgstr "セットアップを完了"
 
 #: openpilot/selfdrive/ui/layouts/settings/settings.py:63
 msgid "Firehose"
-msgstr "Firehose"
+msgstr "大量配信"
 
 #: openpilot/selfdrive/ui/layouts/settings/firehose.py:10
 msgid "Firehose Mode"

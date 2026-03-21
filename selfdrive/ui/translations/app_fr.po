@@ -395,7 +395,7 @@ msgstr "Terminer la configuration"
 
 #: openpilot/selfdrive/ui/layouts/settings/settings.py:63
 msgid "Firehose"
-msgstr "Firehose"
+msgstr "Flux continu"
 
 #: openpilot/selfdrive/ui/layouts/settings/firehose.py:10
 msgid "Firehose Mode"

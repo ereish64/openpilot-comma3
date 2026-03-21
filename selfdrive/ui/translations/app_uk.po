@@ -165,7 +165,7 @@ msgstr "СПОКІЙНИЙ РЕЖИМ"
 #: openpilot/selfdrive/ui/layouts/sidebar.py:138
 #, python-format
 msgid "CONNECT"
-msgstr "CONNECT"
+msgstr "ПІДКЛЮЧИТИ"
 
 #: system/ui/widgets/network.py:376
 #, python-format
@@ -405,7 +405,7 @@ msgstr "Режим зливи"
 #: system/ui/widgets/network.py:326
 #, python-format
 msgid "Forget"
-msgstr "Заб-и"
+msgstr "Забути"
 
 #: system/ui/widgets/network.py:327
 #, python-format

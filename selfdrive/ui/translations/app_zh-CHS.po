@@ -164,7 +164,7 @@ msgstr "安稳模式已开启"
 #: openpilot/selfdrive/ui/layouts/sidebar.py:138
 #, python-format
 msgid "CONNECT"
-msgstr "CONNECT"
+msgstr "连接"
 
 #: system/ui/widgets/network.py:376
 #, python-format
@@ -259,7 +259,7 @@ msgstr "以 km/h 显示速度（非 mph）。"
 #: openpilot/selfdrive/ui/layouts/settings/device.py:57
 #, python-format
 msgid "Dongle ID"
-msgstr "Dongle ID"
+msgstr "设备 ID"
 
 #: openpilot/selfdrive/ui/layouts/settings/software.py:57
 #, python-format
@@ -394,7 +394,7 @@ msgstr "完成设置"
 
 #: openpilot/selfdrive/ui/layouts/settings/settings.py:63
 msgid "Firehose"
-msgstr "Firehose"
+msgstr "数据洪流"
 
 #: openpilot/selfdrive/ui/layouts/settings/firehose.py:10
 msgid "Firehose Mode"
