@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd)"
+ROOT="$DIR/../../../"
+
+cd $DIR
+./update_translations.py --vanish
 
 command -v codex >/dev/null || {
   echo "Install codex CLI to continue:"
@@ -10,7 +14,7 @@ command -v codex >/dev/null || {
   exit 1
 }
 
-codex exec --cd "$ROOT" "$(cat <<EOF
+codex exec --cd "$ROOT" -c 'model_reasoning_effort="low"' --dangerously-bypass-approvals-and-sandbox "$(cat <<EOF
 Update openpilot UI translations in selfdrive/ui/translations.
 - Translate English UI text naturally.
 - Preserve placeholders (%n, %1, {}, {:.1f}), HTML/tags, and plural forms.

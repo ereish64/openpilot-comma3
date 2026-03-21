@@ -68,7 +68,7 @@ msgstr "<br><br>Kalibrierung der Lenkverzögerung abgeschlossen."
 msgid "<br><br>Steering lag calibration is {}% complete."
 msgstr "<br><br>Kalibrierung der Lenkverzögerung zu {}% abgeschlossen."
 
-#: openpilot/selfdrive/ui/widgets/ssh_key.py:30
+#: openpilot/selfdrive/ui/widgets/ssh_key.py:74
 msgid "ADD"
 msgstr "HINZUFÜGEN"
 
@@ -171,8 +171,8 @@ msgstr "VERBINDUNG"
 msgid "CONNECTING..."
 msgstr "VERBINDUNG"
 
-#: system/ui/widgets/network.py:326
 #: system/ui/widgets/confirm_dialog.py:24
+#: system/ui/widgets/network.py:326
 #: system/ui/widgets/option_dialog.py:36
 #: system/ui/widgets/keyboard.py:83
 #, python-format
@@ -295,8 +295,8 @@ msgstr "ETH"
 msgid "EXPERIMENTAL MODE ON"
 msgstr "EXPERIMENTALMODUS AKTIV"
 
-#: openpilot/selfdrive/ui/layouts/settings/toggles.py:229
 #: openpilot/selfdrive/ui/layouts/settings/developer.py:180
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py:229
 #, python-format
 msgid "Enable"
 msgstr "Aktivieren"
@@ -361,7 +361,7 @@ msgstr "Neues Tethering‑Passwort eingeben"
 msgid "Enter password"
 msgstr "Passwort eingeben"
 
-#: openpilot/selfdrive/ui/widgets/ssh_key.py:89
+#: openpilot/selfdrive/ui/widgets/ssh_key.py:129
 #, python-format
 msgid "Enter your GitHub username"
 msgstr "Geben Sie Ihren GitHub‑Benutzernamen ein"
@@ -451,7 +451,7 @@ msgstr "Update installieren"
 msgid "Joystick Debug Mode"
 msgstr "Joystick‑Debugmodus"
 
-#: openpilot/selfdrive/ui/widgets/ssh_key.py:29
+#: openpilot/selfdrive/ui/widgets/ssh_key.py:73
 msgid "LOADING"
 msgstr "LADEN"
 
@@ -488,12 +488,7 @@ msgstr "KEIN"
 msgid "Network"
 msgstr "Netzwerk"
 
-#: openpilot/selfdrive/ui/widgets/ssh_key.py:115
-#, python-format
-msgid "No SSH keys found"
-msgstr "Keine SSH‑Schlüssel gefunden"
-
-#: openpilot/selfdrive/ui/widgets/ssh_key.py:127
+#: openpilot/selfdrive/ui/widgets/ssh_key.py:67
 #, python-format
 msgid "No SSH keys found for user '{}'"
 msgstr "Keine SSH‑Schlüssel für Benutzer '{username}' gefunden"
@@ -580,12 +575,12 @@ msgstr "Ausschalten"
 #: system/ui/widgets/network.py:141
 #, python-format
 msgid "Prevent large data uploads when on a metered Wi-Fi connection"
-msgstr ""
+msgstr "Verhindern Sie das Hochladen großer Datenmengen bei einer getakteten WLAN-Verbindung"
 
 #: system/ui/widgets/network.py:132
 #, python-format
 msgid "Prevent large data uploads when on a metered cellular connection"
-msgstr ""
+msgstr "Verhindern Sie das Hochladen großer Datenmengen bei einer getakteten Mobilfunkverbindung"
 
 #: openpilot/selfdrive/ui/layouts/settings/device.py:24
 msgid "Preview the driver facing camera to ensure that driver monitoring has good visibility. (vehicle must be off)"
@@ -596,7 +591,7 @@ msgstr "Vorschau der Fahrer‑Kamera, um sicherzustellen, dass die Fahrerüberwa
 msgid "QR Code Error"
 msgstr "QR‑Code‑Fehler"
 
-#: openpilot/selfdrive/ui/widgets/ssh_key.py:31
+#: openpilot/selfdrive/ui/widgets/ssh_key.py:75
 msgid "REMOVE"
 msgstr "ENTFERNEN"
 
@@ -660,7 +655,7 @@ msgstr "Fernzugriff"
 msgid "Remote snapshots"
 msgstr "Remote‑Schnappschüsse"
 
-#: openpilot/selfdrive/ui/widgets/ssh_key.py:124
+#: openpilot/selfdrive/ui/widgets/ssh_key.py:65
 #, python-format
 msgid "Request timed out"
 msgstr "Zeitüberschreitung bei der Anfrage"
@@ -687,7 +682,7 @@ msgstr "Überprüfen Sie die Regeln, Funktionen und Einschränkungen von openpil
 #: openpilot/selfdrive/ui/layouts/settings/software.py:68
 #, python-format
 msgid "SELECT"
-msgstr ""
+msgstr "WÄHLEN"
 
 #: openpilot/selfdrive/ui/layouts/settings/developer.py:53
 #, python-format
@@ -707,7 +702,7 @@ msgstr "Auswählen"
 #: openpilot/selfdrive/ui/layouts/settings/software.py:203
 #, python-format
 msgid "Select a branch"
-msgstr ""
+msgstr "Wählen Sie eine Filiale aus"
 
 #: openpilot/selfdrive/ui/layouts/settings/device.py:89
 #, python-format
@@ -754,7 +749,7 @@ msgstr "TEMP"
 #: openpilot/selfdrive/ui/layouts/settings/software.py:68
 #, python-format
 msgid "Target Branch"
-msgstr ""
+msgstr "Zielzweig"
 
 #: system/ui/widgets/network.py:121
 #, python-format
@@ -768,7 +763,7 @@ msgstr "Schalter"
 #: openpilot/selfdrive/ui/layouts/settings/developer.py:79
 #, python-format
 msgid "UI Debug Mode"
-msgstr ""
+msgstr "UI-Debug-Modus"
 
 #: openpilot/selfdrive/ui/layouts/settings/software.py:79
 #, python-format
@@ -865,7 +860,7 @@ msgstr "Kamera startet"
 #: openpilot/selfdrive/ui/layouts/settings/software.py:19
 #, python-format
 msgid "checking..."
-msgstr ""
+msgstr "Überprüfung..."
 
 #: openpilot/selfdrive/ui/widgets/prime.py:63
 #, python-format
@@ -885,7 +880,7 @@ msgstr "unten"
 #: openpilot/selfdrive/ui/layouts/settings/software.py:20
 #, python-format
 msgid "downloading..."
-msgstr ""
+msgstr "Herunterladen..."
 
 #: openpilot/selfdrive/ui/layouts/settings/software.py:116
 #, python-format
@@ -895,7 +890,7 @@ msgstr "Überprüfung auf Updates fehlgeschlagen"
 #: openpilot/selfdrive/ui/layouts/settings/software.py:21
 #, python-format
 msgid "finalizing update..."
-msgstr ""
+msgstr "Update wird finalisiert..."
 
 #: system/ui/widgets/network.py:238
 #: system/ui/widgets/network.py:321
