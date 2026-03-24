@@ -17,6 +17,10 @@
     "severity": 1,
     "_comment": "Set extra field to the failed reason."
   },
+  "Offroad_PowerSupplyLoadTestFailed": {
+    "text": "Power supply load test failed.\n%1",
+    "severity": 1
+  },
   "Offroad_IsTakingSnapshot": {
     "text": "Taking camera snapshots. System won't start until finished.",
     "severity": 0
