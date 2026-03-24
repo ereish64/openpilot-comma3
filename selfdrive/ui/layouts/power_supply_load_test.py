@@ -185,16 +185,21 @@ class PowerSupplyLoadTestWindow(Widget):
     gui_app.pop_widget()
 
   def _update_state(self):
-    if ui_state.started:
-      if self._phase in (LoadTestPhase.PREPARING, LoadTestPhase.RUNNING):
-        cloudlog.warning("deferring power supply load test until next offroad session")
-      self._close()
-      return
+    try:
+      if ui_state.started:
+        if self._phase in (LoadTestPhase.PREPARING, LoadTestPhase.RUNNING):
+          cloudlog.warning("deferring power supply load test until next offroad session")
+        self._close()
+        return
 
-    if self._phase == LoadTestPhase.PREPARING:
-      self._start_test()
-    elif self._phase == LoadTestPhase.RUNNING:
-      self._collect_samples()
+      if self._phase == LoadTestPhase.PREPARING:
+        self._start_test()
+      elif self._phase == LoadTestPhase.RUNNING:
+        self._collect_samples()
+    except Exception:
+      cloudlog.exception("power supply load test failed unexpectedly")
+      if self._phase not in (LoadTestPhase.PASSED, LoadTestPhase.FAILED):
+        self._finish_failure("the diagnostics screen hit an unexpected error", "internal_error")
 
   def _start_test(self):
     self._baseline = self._read_snapshot(0.0)

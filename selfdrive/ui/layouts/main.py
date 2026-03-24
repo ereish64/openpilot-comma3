@@ -1,8 +1,8 @@
 import pyray as rl
 from enum import IntEnum
 import cereal.messaging as messaging
+from openpilot.common.swaglog import cloudlog
 from openpilot.system.ui.lib.application import gui_app
-from openpilot.selfdrive.ui.layouts.power_supply_load_test import PowerSupplyLoadTestWindow, power_supply_load_test_required, power_supply_load_test_supported
 from openpilot.selfdrive.ui.layouts.sidebar import Sidebar, SIDEBAR_WIDTH
 from openpilot.selfdrive.ui.layouts.home import HomeLayout
 from openpilot.selfdrive.ui.layouts.settings.settings import SettingsLayout, PanelType
@@ -41,7 +41,9 @@ class MainLayout(Widget):
 
     # Start onboarding if terms or training not completed, make sure to push after self
     self._onboarding_window = OnboardingWindow()
-    self._power_supply_load_test_window = PowerSupplyLoadTestWindow() if power_supply_load_test_supported() else None
+    self._power_supply_load_test_window = None
+    self._power_supply_load_test_required_fn = None
+    self._power_supply_load_test_loading_failed = False
     gui_app.add_nav_stack_tick(self._nav_stack_tick)
     if not self._onboarding_window.completed:
       gui_app.push_widget(self._onboarding_window)
@@ -115,12 +117,45 @@ class MainLayout(Widget):
     content_rect = self._content_rect if self._sidebar.is_visible else self._rect
     self._layouts[self._current_mode].render(content_rect)
 
+  def _ensure_power_supply_load_test_ready(self) -> bool:
+    if self._power_supply_load_test_loading_failed:
+      return False
+
+    if self._power_supply_load_test_required_fn is not None and self._power_supply_load_test_window is not None:
+      return True
+
+    try:
+      from openpilot.selfdrive.ui.layouts.power_supply_load_test import (
+        PowerSupplyLoadTestWindow,
+        power_supply_load_test_required,
+        power_supply_load_test_supported,
+      )
+    except Exception:
+      cloudlog.exception("failed to import power supply load test, disabling startup hook")
+      self._power_supply_load_test_loading_failed = True
+      return False
+
+    if not power_supply_load_test_supported():
+      self._power_supply_load_test_loading_failed = True
+      return False
+
+    try:
+      self._power_supply_load_test_window = PowerSupplyLoadTestWindow()
+      self._power_supply_load_test_required_fn = power_supply_load_test_required
+      return True
+    except Exception:
+      cloudlog.exception("failed to initialize power supply load test, disabling startup hook")
+      self._power_supply_load_test_loading_failed = True
+      self._power_supply_load_test_window = None
+      self._power_supply_load_test_required_fn = None
+      return False
+
   def _show_power_supply_load_test_if_needed(self):
-    if self._power_supply_load_test_window is None or ui_state.started:
+    if ui_state.started or not self._ensure_power_supply_load_test_ready():
       return
 
     current_commit = ui_state.params.get("GitCommit")
-    if not power_supply_load_test_required(ui_state.params, current_commit):
+    if not self._power_supply_load_test_required_fn(ui_state.params, current_commit):
       return
 
     if not self._onboarding_window.completed:
@@ -131,4 +166,10 @@ class MainLayout(Widget):
       return
 
     if not gui_app.widget_in_stack(self._power_supply_load_test_window):
-      gui_app.push_widget(self._power_supply_load_test_window)
+      try:
+        gui_app.push_widget(self._power_supply_load_test_window)
+      except Exception:
+        cloudlog.exception("failed to show power supply load test, disabling startup hook")
+        self._power_supply_load_test_loading_failed = True
+        self._power_supply_load_test_window = None
+        self._power_supply_load_test_required_fn = None
